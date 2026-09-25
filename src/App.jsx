@@ -636,41 +636,6 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
         </table>
       </div>
 
-      <div className="statement-bottom-reconciliation">
-        <div className="statement-reconcile-card">
-          <div className="reconcile-card-header">
-            <strong>REMITTANCE RECONCILIATION SCHEDULE</strong>
-            <span>(Summary of Collections and Claims for Remittance Settlement)</span>
-          </div>
-          <table className="reconcile-table">
-            <tbody>
-              <tr>
-                <td className="rec-text-col">Total Remittance to Collect from Positive Agents:</td>
-                <td className="rec-val-col">₱ {formatAmount(positiveTotals.netSales)}</td>
-              </tr>
-              <tr>
-                <td className="rec-text-col">Less: Total Deficits to Cover:</td>
-                <td className="rec-val-col accounting-deficit-text">
-                  ({formatAmount(Math.abs(negativeTotals.netSales))})
-                </td>
-              </tr>
-              <tr className="rec-final-total-row">
-                <td className="rec-text-col">
-                  <strong>NET SUPERVISOR REMITTANCE DUE:</strong>
-                </td>
-                <td className={`rec-val-col rec-grand-val ${grandTotals.netSales < 0 ? 'accounting-deficit-text' : ''}`}>
-                  <strong>
-                    {grandTotals.netSales < 0
-                      ? `(₱ ${formatAmount(Math.abs(grandTotals.netSales))})`
-                      : `₱ ${formatAmount(grandTotals.netSales)}`}
-                  </strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       <div className="statement-signatures-section">
         <div className="statement-sig-column">
           <div className="statement-sig-line" />
@@ -679,13 +644,8 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
         </div>
         <div className="statement-sig-column">
           <div className="statement-sig-line" />
-          <span className="statement-sig-title">AUDITED &amp; VERIFIED BY</span>
-          <span className="statement-sig-name">Accounting / Treasury ({branchName})</span>
-        </div>
-        <div className="statement-sig-column">
-          <div className="statement-sig-line" />
-          <span className="statement-sig-title">APPROVED BY</span>
-          <span className="statement-sig-name">Operations Management ({branchName})</span>
+          <span className="statement-sig-title">CASHIER / RECEIVER</span>
+          <span className="statement-sig-name">Cashier / Receiver ({branchName})</span>
         </div>
       </div>
     </div>

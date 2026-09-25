@@ -1073,13 +1073,13 @@ button { font: inherit; }
   color: #0f172a;
 }
 
-/* Formal Signatures Strip */
+/* Formal Signatures Strip (Supervisor & Cashier/Receiver) */
 .statement-signatures-section {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 32px;
-  padding-top: 24px;
-  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 48px;
+  padding-top: 28px;
+  margin-top: 24px;
   border-top: 1px dashed #cbd5e1;
 }
 
@@ -1087,6 +1087,7 @@ button { font: inherit; }
   display: flex;
   flex-direction: column;
   gap: 3px;
+  width: 260px;
 }
 
 .statement-sig-line {
@@ -1335,6 +1336,12 @@ button { font: inherit; }
   .rec-final-total-row td {
     border-top: 1.5pt solid #000000 !important;
     border-bottom: 3pt double #000000 !important;
+  }
+
+  .statement-signatures-section {
+    page-break-inside: avoid !important;
+    margin-top: 15mm !important;
+    padding-top: 5mm !important;
   }
 
   .statement-sig-line {
