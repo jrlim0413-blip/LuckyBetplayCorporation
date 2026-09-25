@@ -7,6 +7,7 @@ const drawIds = (import.meta.env.VITE_DRAW_IDS ?? '').split(',').map((value) => 
 const overallApiUrl = import.meta.env.VITE_OVERALL_API_URL
 const supervisorApiUrl = import.meta.env.VITE_SUPERVISOR_API_URL
 const authorization = import.meta.env.VITE_AUTHORIZATION
+const configuredBranch = import.meta.env.VITE_BRANCH_NAME || 'Mandaue'
 
 function getCurrentDate() {
   return formatDate(new Date())
@@ -67,13 +68,13 @@ function formatValue(value) {
 function formatCurrency(value) {
   const amount = Number(value)
   if (!Number.isFinite(amount)) return '—'
-  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(amount)
+  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
 }
 
 function formatAmount(value) {
   const amount = Number(value)
   if (!Number.isFinite(amount)) return '—'
-  return new Intl.NumberFormat('en-PH', { maximumFractionDigits: 1 }).format(amount)
+  return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
 }
 
 function formatDrawTime(value) {
@@ -108,6 +109,12 @@ function Icon({ name, size = 18 }) {
     history: <><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5M12 7v5l4 2" /></>,
     user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
     users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
+    close: <path d="M18 6 6 18M6 6l12 12" />,
+    alert: <><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>,
+    gauge: <><path d="M12 14v-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" /></>,
+    trending: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></>,
+    print: <><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></>,
+    fileText: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></>,
   }
   return <svg className="ui-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
@@ -259,7 +266,7 @@ function DrawGrossSummary({ supervisorReports }) {
         {totals.map((group) => (
           <div className={`draw-summary-card draw-${group.key}`} key={group.key}>
             <div className="draw-card-header">
-              <span className="draw-card-label">{group.label}</span>
+              <span className="draw-card-label">{group.label.toUpperCase()}</span>
               <small className="draw-card-schedule">{group.schedule}</small>
             </div>
             <div className="draw-card-values">
@@ -279,15 +286,30 @@ function DrawGrossSummary({ supervisorReports }) {
   )
 }
 
-function MatrixTable({ group }) {
+
+
+function MatrixTable({ group, showOverall = false }) {
+  const supervisorPositiveThirdNetSales = group.agents.reduce((total, agent) => {
+    const agentOverallCommission = agent.totalGross * 0.1
+    const agentThirdNetSales = getGroupedNet(agent, drawGroups[2]) - agentOverallCommission
+    return total + (agentThirdNetSales > 0 ? agentThirdNetSales : 0)
+  }, 0)
+
   return (
     <div className="table-wrap">
-      <table className="gross-table matrix-table">
+      <table className="matrix-table">
         <thead>
           <tr>
             <th className="agent-header" rowSpan="2">Agent</th>
             {drawGroups.map((drawGroup) => <th className={`draw-group-heading draw-${drawGroup.key}`} colSpan={drawGroup.key === 'morning' ? 3 : 4} key={drawGroup.key}><span>{drawGroup.label}</span><small>{drawGroup.schedule}</small></th>)}
-            <th className="draw-group-heading draw-commission" rowSpan="2"><span>Commission</span><small>10% of Gross</small></th><th className="draw-group-heading draw-net-sales" rowSpan="2"><span>Net Sales</span><small>3rd Net - Commission</small></th><th className="draw-group-heading draw-overall" colSpan="3"><span>Overall</span><small>All draws</small></th>
+            <th className="draw-group-heading draw-commission" rowSpan="2"><span>Commission</span><small>10% of Gross</small></th>
+            <th className="draw-group-heading draw-net-sales" rowSpan="2"><span>Net Sales</span><small>3rd Net - Commission</small></th>
+            {showOverall && (
+              <>
+                <th className="draw-separator-col" rowSpan="2" aria-hidden="true"></th>
+                <th className="draw-group-heading draw-overall" colSpan="5"><span>Overall</span><small>All draws</small></th>
+              </>
+            )}
           </tr>
           <tr>
             {drawGroups.flatMap((drawGroup) => [
@@ -297,28 +319,55 @@ function MatrixTable({ group }) {
               ...(drawGroup.key === 'evening' ? [<th className="draw-subheading draw-evening carryover-header" key="evening-carryover" title="2nd Draw Net + 3rd Draw Gross"><small>2nd Net + 3rd Gross</small></th>] : []),
               <th className={`draw-subheading draw-${drawGroup.key}`} key={`${drawGroup.key}-net`}><span className="draw-header-label">Net</span></th>,
             ])}
-            <th className="draw-subheading draw-overall"><span className="draw-header-label">Gross</span></th><th className="draw-subheading draw-overall"><span className="draw-header-label">Hits</span></th><th className="draw-subheading draw-overall"><span className="draw-header-label">Net</span></th>
+            {showOverall && (
+              <>
+                <th className="draw-subheading draw-overall"><span className="draw-header-label">Gross</span></th>
+                <th className="draw-subheading draw-overall"><span className="draw-header-label">Hits</span></th>
+                <th className="draw-subheading draw-overall"><span className="draw-header-label">Commission</span></th>
+                <th className="draw-subheading draw-overall"><span className="draw-header-label">Net</span></th>
+                <th className="draw-subheading draw-overall"><span className="draw-header-label">Net Sales</span></th>
+              </>
+            )}
           </tr>
         </thead>
         <tbody>
-          {group.agents.map((agent) => <tr key={`${group.supervisor}-${agent.key}`}>
-            <td className="agent-name-cell"><strong>{agent.teller}</strong></td>
-            {drawGroups.flatMap((drawGroup) => {
-              const gross = getGroupedDrawTotal(agent, drawGroup, 'gross')
-              const hits = getGroupedDrawTotal(agent, drawGroup, 'hits')
-              const net = getGroupedNet(agent, drawGroup)
-              const carryover = getCarryoverTotal(agent)
-              const thirdCarryover = getThirdDrawCarryover(agent)
-              return [
-                <td className={`draw-cell draw-${drawGroup.key} ${gross < 0 ? 'negative-value' : ''}`} key={`${agent.key}-${drawGroup.key}-gross`}>{formatAmount(gross)}</td>,
-                <td className={`draw-cell draw-${drawGroup.key} ${hits < 0 ? 'negative-value' : ''}`} key={`${agent.key}-${drawGroup.key}-hits`}>{formatAmount(hits)}</td>,
-                ...(drawGroup.key === 'afternoon' ? [<td className={`draw-cell draw-afternoon carryover-cell ${carryover < 0 ? 'negative-value' : ''}`} key={`${agent.key}-carryover`}>{formatAmount(carryover)}</td>] : []),
-                ...(drawGroup.key === 'evening' ? [<td className={`draw-cell draw-evening carryover-cell ${thirdCarryover < 0 ? 'negative-value' : ''}`} key={`${agent.key}-third-carryover`}>{formatAmount(thirdCarryover)}</td>] : []),
-                <td className={`draw-cell draw-${drawGroup.key} net-cell ${net < 0 ? 'negative-value' : ''}`} key={`${agent.key}-${drawGroup.key}-net`}>{formatAmount(net)}</td>,
-              ]
-            })}
-            <td className="draw-cell draw-commission"><strong>{formatAmount(agent.totalGross * 0.1)}</strong></td><td className={`draw-cell draw-net-sales ${getGroupedNet(agent, drawGroups[2]) - (agent.totalGross * 0.1) < 0 ? 'negative-value' : ''}`}><strong>{formatAmount(getGroupedNet(agent, drawGroups[2]) - (agent.totalGross * 0.1))}</strong></td><td className="draw-cell draw-overall"><strong>{formatAmount(agent.totalGross)}</strong></td><td className="draw-cell draw-overall"><strong>{formatAmount(agent.totalHits)}</strong></td><td className="draw-cell draw-overall net-cell"><strong>{formatAmount(agent.totalGross - agent.totalHits)}</strong></td>
-          </tr>)}
+          {group.agents.map((agent) => {
+            const agentOverallNet = agent.totalGross - agent.totalHits
+            const agentOverallCommission = agent.totalGross * 0.1
+            const agentOverallNetSales = agentOverallNet - agentOverallCommission
+            const agentThirdNetSales = getGroupedNet(agent, drawGroups[2]) - agentOverallCommission
+            return (
+              <tr key={`${group.supervisor}-${agent.key}`}>
+                <td className="agent-name-cell"><strong>{agent.teller}</strong></td>
+                {drawGroups.flatMap((drawGroup) => {
+                  const gross = getGroupedDrawTotal(agent, drawGroup, 'gross')
+                  const hits = getGroupedDrawTotal(agent, drawGroup, 'hits')
+                  const net = getGroupedNet(agent, drawGroup)
+                  const carryover = getCarryoverTotal(agent)
+                  const thirdCarryover = getThirdDrawCarryover(agent)
+                  return [
+                    <td className={`draw-cell draw-${drawGroup.key} ${gross < 0 ? 'negative-value' : ''}`} key={`${agent.key}-${drawGroup.key}-gross`}>{formatAmount(gross)}</td>,
+                    <td className={`draw-cell draw-${drawGroup.key} ${hits < 0 ? 'negative-value' : ''}`} key={`${agent.key}-${drawGroup.key}-hits`}>{formatAmount(hits)}</td>,
+                    ...(drawGroup.key === 'afternoon' ? [<td className={`draw-cell draw-afternoon carryover-cell ${carryover < 0 ? 'negative-value' : ''}`} key={`${agent.key}-carryover`}>{formatAmount(carryover)}</td>] : []),
+                    ...(drawGroup.key === 'evening' ? [<td className={`draw-cell draw-evening carryover-cell ${thirdCarryover < 0 ? 'negative-value' : ''}`} key={`${agent.key}-third-carryover`}>{formatAmount(thirdCarryover)}</td>] : []),
+                    <td className={`draw-cell draw-${drawGroup.key} net-cell ${net < 0 ? 'negative-value' : ''}`} key={`${agent.key}-${drawGroup.key}-net`}>{formatAmount(net)}</td>,
+                  ]
+                })}
+                <td className="draw-cell draw-commission"><strong>{formatAmount(agentOverallCommission)}</strong></td>
+                <td className={`draw-cell draw-net-sales ${agentThirdNetSales < 0 ? 'negative-value' : ''}`}><strong>{formatAmount(agentThirdNetSales)}</strong></td>
+                {showOverall && (
+                  <>
+                    <td className="draw-separator-cell" aria-hidden="true" />
+                    <td className="draw-cell draw-overall"><strong>{formatAmount(agent.totalGross)}</strong></td>
+                    <td className="draw-cell draw-overall"><strong>{formatAmount(agent.totalHits)}</strong></td>
+                    <td className="draw-cell draw-overall"><strong>{formatAmount(agentOverallCommission)}</strong></td>
+                    <td className="draw-cell draw-overall net-cell"><strong>{formatAmount(agentOverallNet)}</strong></td>
+                    <td className={`draw-cell draw-overall draw-overall-net-sales ${agentOverallNetSales < 0 ? 'negative-value' : ''}`}><strong>{formatAmount(agentOverallNetSales)}</strong></td>
+                  </>
+                )}
+              </tr>
+            )
+          })}
           <tr className="total-row">
             <td className="agent-name-cell total-agent-cell"><strong>Supervisor total</strong></td>
             {drawGroups.flatMap((drawGroup) => {
@@ -339,10 +388,386 @@ function MatrixTable({ group }) {
                 <td className={`draw-cell draw-${drawGroup.key} net-cell ${net < 0 ? 'negative-value' : ''}`} key={`total-${drawGroup.key}-net`}><strong>{formatAmount(net)}</strong></td>,
               ]
             })}
-            <td className="draw-cell draw-commission"><strong>{formatAmount(group.totalGross * 0.1)}</strong></td><td className={`draw-cell draw-net-sales ${getSupervisorThirdDrawCarryover(group) - (group.totalGross * 0.1) < 0 ? 'negative-value' : ''}`}><strong>{formatAmount(getSupervisorThirdDrawCarryover(group) - (group.totalGross * 0.1))}</strong></td><td className="draw-cell draw-overall"><strong>{formatAmount(group.totalGross)}</strong></td><td className="draw-cell draw-overall"><strong>{formatAmount(group.totalHits)}</strong></td><td className="draw-cell draw-overall net-cell"><strong>{formatAmount(group.totalGross - group.totalHits)}</strong></td>
+            <td className="draw-cell draw-commission"><strong>{formatAmount(group.totalGross * 0.1)}</strong></td>
+            <td className="draw-cell draw-net-sales"><strong>{formatAmount(supervisorPositiveThirdNetSales)}</strong></td>
+            {showOverall && (
+              <>
+                <td className="draw-separator-cell" aria-hidden="true" />
+                <td className="draw-cell draw-overall"><strong>{formatAmount(group.totalGross)}</strong></td>
+                <td className="draw-cell draw-overall"><strong>{formatAmount(group.totalHits)}</strong></td>
+                <td className="draw-cell draw-overall"><strong>{formatAmount(group.totalGross * 0.1)}</strong></td>
+                <td className="draw-cell draw-overall net-cell"><strong>{formatAmount(group.totalGross - group.totalHits)}</strong></td>
+                <td className={`draw-cell draw-overall draw-overall-net-sales ${(group.totalGross - group.totalHits) - (group.totalGross * 0.1) < 0 ? 'negative-value' : ''}`}><strong>{formatAmount((group.totalGross - group.totalHits) - (group.totalGross * 0.1))}</strong></td>
+              </>
+            )}
           </tr>
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function getAgentOverallMetrics(agent) {
+  const gross = Number(agent.totalGross) || 0
+  const hits = Number(agent.totalHits) || 0
+  const commission = gross * 0.1
+  const net = gross - hits
+  const netSales = net - commission
+  return { gross, hits, commission, net, netSales }
+}
+
+function splitAgentsByRemittance(agents = []) {
+  const positive = []
+  const negative = []
+
+  agents.forEach((agent) => {
+    const metrics = getAgentOverallMetrics(agent)
+    if (metrics.netSales >= 0) {
+      positive.push({ ...agent, ...metrics })
+    } else {
+      negative.push({ ...agent, ...metrics })
+    }
+  })
+
+  return { positive, negative }
+}
+
+function calculateMetricsTotals(list = []) {
+  return list.reduce(
+    (acc, item) => ({
+      gross: acc.gross + item.gross,
+      hits: acc.hits + item.hits,
+      commission: acc.commission + item.commission,
+      net: acc.net + item.net,
+      netSales: acc.netSales + item.netSales,
+    }),
+    { gross: 0, hits: 0, commission: 0, net: 0, netSales: 0 }
+  )
+}
+
+function SupervisorStatementTable({ group, selectedDate, branchName = configuredBranch, isModal = false }) {
+  const { positive, negative } = splitAgentsByRemittance(group?.agents || [])
+  const positiveTotals = calculateMetricsTotals(positive)
+  const negativeTotals = calculateMetricsTotals(negative)
+  const grandTotals = {
+    gross: positiveTotals.gross + negativeTotals.gross,
+    hits: positiveTotals.hits + negativeTotals.hits,
+    commission: positiveTotals.commission + negativeTotals.commission,
+    net: positiveTotals.net + negativeTotals.net,
+    netSales: positiveTotals.netSales + negativeTotals.netSales,
+  }
+
+  return (
+    <div className={`statement-sheet ${isModal ? 'statement-sheet-modal' : 'statement-sheet-inline'}`}>
+      <div className="statement-header-block">
+        <h3 className="statement-company-title">LUCKY BETPLAY CORPORATION</h3>
+        <div className="statement-branch-tag">
+          <span>BRANCH:</span> <strong>{branchName.toUpperCase()}</strong>
+        </div>
+        <h4 className="statement-report-title">CONDENSED SUPERVISOR AGENT REMITTANCE SUMMARY</h4>
+        <p className="statement-report-subtitle">(Unaudited — Based on Consolidated Overall Draws Performance)</p>
+        <div className="statement-meta-row">
+          <span className="statement-meta-pill"><strong>BRANCH:</strong> {branchName}</span>
+          <span className="statement-meta-divider">•</span>
+          <span className="statement-meta-pill"><strong>SUPERVISOR:</strong> {group.supervisor}</span>
+          <span className="statement-meta-divider">•</span>
+          <span className="statement-meta-pill"><strong>DATE:</strong> {formatDisplayDate(selectedDate)}</span>
+          <span className="statement-meta-divider">•</span>
+          <span className="statement-meta-pill"><strong>TOTAL AGENTS:</strong> {group.agents?.length || 0}</span>
+        </div>
+      </div>
+
+      <div className="statement-table-container">
+        <table className="statement-balance-table">
+          <thead>
+            <tr className="statement-th-row">
+              <th className="statement-th statement-th-agent">AGENT / TELLER</th>
+              <th className="statement-th statement-th-num">GROSS</th>
+              <th className="statement-th statement-th-num">HITS</th>
+              <th className="statement-th statement-th-num">COMMISSION (10%)</th>
+              <th className="statement-th statement-th-num">NET</th>
+              <th className="statement-th statement-th-num statement-th-remit">NET SALES / REMITTANCE</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="statement-section-divider-row">
+              <td colSpan={6} className="statement-section-heading-cell">
+                <strong>POSITIVE REMITTANCES (TO COLLECT / SOLVENT AGENTS):</strong>
+              </td>
+            </tr>
+
+            {positive.length === 0 ? (
+              <tr className="statement-empty-state-row">
+                <td colSpan={6} className="statement-empty-state-cell">
+                  No positive remittance agents recorded for this period.
+                </td>
+              </tr>
+            ) : (
+              positive.map((agent, index) => (
+                <tr key={`pos-${agent.key || index}`} className="statement-data-row statement-pos-row">
+                  <td className="statement-td statement-agent-td">
+                    <span className="statement-agent-name">{agent.teller}</span>
+                  </td>
+                  <td className="statement-td statement-num-td">
+                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                    {formatAmount(agent.gross)}
+                  </td>
+                  <td className="statement-td statement-num-td">{formatAmount(agent.hits)}</td>
+                  <td className="statement-td statement-num-td">{formatAmount(agent.commission)}</td>
+                  <td className="statement-td statement-num-td">{formatAmount(agent.net)}</td>
+                  <td className="statement-td statement-num-td statement-remit-td">
+                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                    <strong>{formatAmount(agent.netSales)}</strong>
+                  </td>
+                </tr>
+              ))
+            )}
+
+            <tr className="statement-subtotal-data-row statement-pos-subtotal-row">
+              <td className="statement-td statement-subtotal-label-td">
+                <span className="statement-subtotal-indent">Total Positive Remittances (Subtotal)</span>
+              </td>
+              <td className="statement-td statement-subtotal-num-td">
+                <span className="accounting-currency-symbol">₱</span>
+                <strong>{formatAmount(positiveTotals.gross)}</strong>
+              </td>
+              <td className="statement-td statement-subtotal-num-td">
+                <strong>{formatAmount(positiveTotals.hits)}</strong>
+              </td>
+              <td className="statement-td statement-subtotal-num-td">
+                <strong>{formatAmount(positiveTotals.commission)}</strong>
+              </td>
+              <td className="statement-td statement-subtotal-num-td">
+                <strong>{formatAmount(positiveTotals.net)}</strong>
+              </td>
+              <td className="statement-td statement-subtotal-num-td statement-remit-td">
+                <span className="accounting-currency-symbol">₱</span>
+                <strong>{formatAmount(positiveTotals.netSales)}</strong>
+              </td>
+            </tr>
+
+            <tr className="statement-spacer-divider-row" aria-hidden="true">
+              <td colSpan={6} />
+            </tr>
+
+            <tr className="statement-section-divider-row statement-negative-header-row">
+              <td colSpan={6} className="statement-section-heading-cell statement-negative-heading-cell">
+                <strong>NEGATIVE DEFICITS / CLAIMS (OVERHITS / MGA PALABUNOT):</strong>
+              </td>
+            </tr>
+
+            {negative.length === 0 ? (
+              <tr className="statement-empty-state-row">
+                <td colSpan={6} className="statement-empty-state-cell statement-clean-indicator">
+                  ✓ No negative deficit records — all {positive.length} agents are solvent with positive balances.
+                </td>
+              </tr>
+            ) : (
+              negative.map((agent, index) => (
+                <tr key={`neg-${agent.key || index}`} className="statement-data-row statement-neg-row">
+                  <td className="statement-td statement-agent-td">
+                    <span className="statement-agent-name">{agent.teller}</span>
+                  </td>
+                  <td className="statement-td statement-num-td">
+                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                    {formatAmount(agent.gross)}
+                  </td>
+                  <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.hits)}</td>
+                  <td className="statement-td statement-num-td">{formatAmount(agent.commission)}</td>
+                  <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.net)}</td>
+                  <td className="statement-td statement-num-td statement-remit-td accounting-deficit-text">
+                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                    <strong>({formatAmount(Math.abs(agent.netSales))})</strong>
+                  </td>
+                </tr>
+              ))
+            )}
+
+            <tr className="statement-subtotal-data-row statement-neg-subtotal-row">
+              <td className="statement-td statement-subtotal-label-td">
+                <span className="statement-subtotal-indent statement-neg-label-indent">Total Deficits / Overhits (Subtotal)</span>
+              </td>
+              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
+                <span className="accounting-currency-symbol">₱</span>
+                <strong>{formatAmount(negativeTotals.gross)}</strong>
+              </td>
+              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
+                <strong>{formatAmount(negativeTotals.hits)}</strong>
+              </td>
+              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
+                <strong>{formatAmount(negativeTotals.commission)}</strong>
+              </td>
+              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
+                <strong>{formatAmount(negativeTotals.net)}</strong>
+              </td>
+              <td className="statement-td statement-subtotal-num-td statement-remit-td statement-neg-subtotal-cell accounting-deficit-text">
+                <span className="accounting-currency-symbol">₱</span>
+                <strong>({formatAmount(Math.abs(negativeTotals.netSales))})</strong>
+              </td>
+            </tr>
+
+            <tr className="statement-spacer-divider-row" aria-hidden="true">
+              <td colSpan={6} />
+            </tr>
+
+            <tr className="statement-grand-total-row">
+              <td className="statement-td statement-grand-label-td">
+                <strong>CONSOLIDATED SUPERVISOR TOTAL (OVERALL DRAWS)</strong>
+              </td>
+              <td className="statement-td statement-grand-num-td">
+                <span className="accounting-currency-symbol">₱</span>
+                <strong>{formatAmount(grandTotals.gross)}</strong>
+              </td>
+              <td className="statement-td statement-grand-num-td">
+                <strong>{formatAmount(grandTotals.hits)}</strong>
+              </td>
+              <td className="statement-td statement-grand-num-td">
+                <strong>{formatAmount(grandTotals.commission)}</strong>
+              </td>
+              <td className="statement-td statement-grand-num-td">
+                <strong>{formatAmount(grandTotals.net)}</strong>
+              </td>
+              <td className={`statement-td statement-grand-num-td statement-remit-td ${grandTotals.netSales < 0 ? 'accounting-deficit-text' : ''}`}>
+                <span className="accounting-currency-symbol">₱</span>
+                <strong>{grandTotals.netSales < 0 ? `(${formatAmount(Math.abs(grandTotals.netSales))})` : formatAmount(grandTotals.netSales)}</strong>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="statement-bottom-reconciliation">
+        <div className="statement-reconcile-card">
+          <div className="reconcile-card-header">
+            <strong>REMITTANCE RECONCILIATION SCHEDULE</strong>
+            <span>(Summary of Collections and Claims for Remittance Settlement)</span>
+          </div>
+          <table className="reconcile-table">
+            <tbody>
+              <tr>
+                <td className="rec-text-col">Total Remittance to Collect from Positive Agents:</td>
+                <td className="rec-val-col">₱ {formatAmount(positiveTotals.netSales)}</td>
+              </tr>
+              <tr>
+                <td className="rec-text-col">Less: Total Overhit / Deficit Claims to Cover:</td>
+                <td className="rec-val-col accounting-deficit-text">
+                  ({formatAmount(Math.abs(negativeTotals.netSales))})
+                </td>
+              </tr>
+              <tr className="rec-final-total-row">
+                <td className="rec-text-col">
+                  <strong>NET SUPERVISOR REMITTANCE DUE:</strong>
+                </td>
+                <td className={`rec-val-col rec-grand-val ${grandTotals.netSales < 0 ? 'accounting-deficit-text' : ''}`}>
+                  <strong>
+                    {grandTotals.netSales < 0
+                      ? `(₱ ${formatAmount(Math.abs(grandTotals.netSales))})`
+                      : `₱ ${formatAmount(grandTotals.netSales)}`}
+                  </strong>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="statement-signatures-section">
+        <div className="statement-sig-column">
+          <div className="statement-sig-line" />
+          <span className="statement-sig-title">PREPARED BY (SUPERVISOR - {branchName.toUpperCase()})</span>
+          <strong className="statement-sig-name">{group.supervisor}</strong>
+        </div>
+        <div className="statement-sig-column">
+          <div className="statement-sig-line" />
+          <span className="statement-sig-title">AUDITED &amp; VERIFIED BY</span>
+          <span className="statement-sig-name">Accounting / Treasury ({branchName})</span>
+        </div>
+        <div className="statement-sig-column">
+          <div className="statement-sig-line" />
+          <span className="statement-sig-title">APPROVED BY</span>
+          <span className="statement-sig-name">Operations Management ({branchName})</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SupervisorStatementModal({ group, selectedDate, allSupervisors = [], branchName = configuredBranch, onClose, onSelectSupervisor }) {
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  const consolidatedOption = {
+    supervisor: 'ALL SUPERVISORS (CONSOLIDATED)',
+    agents: allSupervisors.flatMap((s) => s.agents.map((a) => ({
+      ...a,
+      teller: `${a.teller} (${s.supervisor})`,
+    }))),
+  }
+
+  return (
+    <div className="statement-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="statement-modal-shell" onClick={(e) => e.stopPropagation()}>
+        <div className="statement-modal-controls-bar no-print">
+          <div className="statement-controls-left">
+            <span className="statement-controls-title">Supervisor Remittance Statement</span>
+            {allSupervisors.length > 1 && (
+              <div className="statement-dropdown-wrap">
+                <Icon name="user" size={13} />
+                <select
+                  value={group.supervisor}
+                  onChange={(e) => {
+                    if (e.target.value === 'ALL SUPERVISORS (CONSOLIDATED)') {
+                      onSelectSupervisor(consolidatedOption)
+                    } else {
+                      const found = allSupervisors.find((g) => g.supervisor === e.target.value)
+                      if (found) onSelectSupervisor(found)
+                    }
+                  }}
+                  className="statement-supervisor-dropdown"
+                >
+                  <option value="ALL SUPERVISORS (CONSOLIDATED)">ALL SUPERVISORS (CONSOLIDATED)</option>
+                  <optgroup label="Individual Supervisors">
+                    {allSupervisors.map((s) => (
+                      <option key={s.supervisor} value={s.supervisor}>
+                        {s.supervisor} ({s.agents.length} agents)
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+            )}
+          </div>
+          <div className="statement-controls-right">
+            <button
+              type="button"
+              className="statement-action-btn statement-print-trigger-btn"
+              onClick={() => window.print()}
+              title="Print official document (A4 / Letter)"
+            >
+              <Icon name="print" size={14} />
+              <span>Print Statement</span>
+            </button>
+            <button
+              type="button"
+              className="statement-action-btn statement-close-trigger-btn"
+              onClick={onClose}
+              title="Close (Esc)"
+              aria-label="Close"
+            >
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div className="statement-modal-content-area">
+          <SupervisorStatementTable group={group} selectedDate={selectedDate} branchName={branchName} isModal={true} />
+        </div>
+      </div>
     </div>
   )
 }
@@ -356,6 +781,9 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(defaultFromDate)
   const [activeView, setActiveView] = useState('overview')
   const [selectedSupervisor, setSelectedSupervisor] = useState('all')
+  const [showOverall, setShowOverall] = useState(false)
+  const [reportViewMode, setReportViewMode] = useState('matrix')
+  const [statementModalGroup, setStatementModalGroup] = useState(null)
 
   const isToday = selectedDate === getCurrentDate()
   const isYesterday = selectedDate === getYesterdayDate()
@@ -456,6 +884,8 @@ function App() {
     return () => window.clearTimeout(timeoutId)
   }, [activeView, loadReport, selectedDate])
 
+  const branchName = (!import.meta.env.VITE_BRANCH_NAME && rows.find((r) => r?.location || r?.branch || r?.branchName)?.location) || configuredBranch
+
   const columns = getColumns(rows)
   const drawRows = rows.filter((row) => row && row.drawTime !== undefined)
   const supervisorReports = getSupervisorReports(drawRows, supervisorRows)
@@ -477,7 +907,13 @@ function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><img className="brand-logo" src="/LB.png" alt="Lucky Betplay Corporation" /><span><strong>STL Reports</strong><small>Finance workspace</small></span></div>
+        <div className="brand">
+          <img className="brand-logo" src="/LB.png" alt="Lucky Betplay Corporation" />
+          <span>
+            <strong>STL Reports</strong>
+            <small className="brand-branch-badge">{branchName} Branch</small>
+          </span>
+        </div>
         <nav className="sidebar-nav" aria-label="Main navigation">
           <p className="nav-label">Workspace</p>
           <button className={`nav-item ${activeView === 'overview' ? 'active' : ''}`} type="button" onClick={() => setActiveView('overview')}><span className="nav-icon"><Icon name="overview" /></span> Overview</button>
@@ -489,7 +925,12 @@ function App() {
 
       <main className="main-content">
         <header className="topbar">
-          <div><p className="eyebrow">ACCOUNTING / {activeView.toUpperCase()}</p><h1>{activeView === 'reports' ? 'Agent reports' : 'Overall reports'}</h1></div>
+          <div>
+            <p className="eyebrow">
+              ACCOUNTING / {activeView.toUpperCase()} • <span className="topbar-branch-chip">{branchName} Branch</span>
+            </p>
+            <h1>{activeView === 'reports' ? 'Agent reports' : 'Overall reports'}</h1>
+          </div>
           <div className="topbar-actions"><span className="date-label">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Connecting...'}</span><button className="refresh-button" type="button" onClick={() => loadReport(selectedDate)} disabled={loading}><Icon name="refresh" size={15} /> {loading ? 'Loading' : 'Refresh'}</button><div className="avatar" aria-label="Accountant profile">AC</div></div>
         </header>
 
@@ -647,12 +1088,88 @@ function App() {
                     Show All
                   </button>
                 )}
+
+                <div className="overall-toggle-container">
+                  <span className="overall-toggle-divider" />
+                  <label className="overall-toggle-label" htmlFor="toggle-overall-columns" title="Toggle Overall group visibility">
+                    <span className="overall-toggle-text">Show Overall</span>
+                    <span className="toggle-switch-ui">
+                      <input
+                        type="checkbox"
+                        id="toggle-overall-columns"
+                        className="toggle-checkbox"
+                        checked={showOverall}
+                        onChange={(e) => setShowOverall(e.target.checked)}
+                      />
+                      <span className="toggle-track-slider" />
+                    </span>
+                  </label>
+                </div>
+
+                <div className="view-mode-toggle-wrap">
+                  <span className="overall-toggle-divider" />
+                  <div className="view-mode-tabs" role="group" aria-label="Table format">
+                    <button
+                      type="button"
+                      className={`view-mode-tab-btn ${reportViewMode === 'matrix' ? 'active' : ''}`}
+                      onClick={() => setReportViewMode('matrix')}
+                      title="Show Draw Matrix (10:30 AM, 2:00 PM, 3:00 PM, 5:00 PM, 7:00 PM, 9:00 PM)"
+                    >
+                      <Icon name="fields" size={12} />
+                      <span>Draw Matrix</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`view-mode-tab-btn ${reportViewMode === 'statement' ? 'active' : ''}`}
+                      onClick={() => setReportViewMode('statement')}
+                      title="Show Balance Sheet Remittance Statement (Positive on top, Negative on bottom)"
+                    >
+                      <Icon name="fileText" size={12} />
+                      <span>Remittance Statement</span>
+                    </button>
+                  </div>
+                </div>
+
+                {supervisorReports.length > 0 && (
+                  <button
+                    type="button"
+                    className="supervisor-statement-top-btn"
+                    onClick={() => {
+                      const target = activeSupervisor !== 'all'
+                        ? (displayedSupervisors[0] ?? supervisorReports[0])
+                        : (displayedSupervisors[0] ?? supervisorReports[0])
+                      if (target) setStatementModalGroup(target)
+                    }}
+                    title="View and print official balance sheet remittance statement"
+                  >
+                    <Icon name="print" size={13} />
+                    <span>Print Statement</span>
+                  </button>
+                )}
               </div>
             </div>
             {!hasAgentFields || !hasSupervisorFields ? <div className="breakdown-note">The current API response does not include {hasAgentFields ? 'supervisor' : hasSupervisorFields ? 'agent' : 'agent or supervisor'} fields, so the available gross is grouped as unspecified. The endpoint must return those fields for an attributed breakdown.</div> : null}
             {drawRows.length === 0 ? <div className="state-message">No agent report records were returned for {formatDisplayDate(selectedDate)}.</div> : <div className="supervisor-groups">{displayedSupervisors.map((group) => <section className="supervisor-group" key={group.supervisor}>
-              <div className="supervisor-heading"><strong>{group.supervisor}</strong><span>{group.agents.length} agents / {drawGroups.length} draw groups</span></div>
-              <MatrixTable group={group} />
+              <div className="supervisor-heading">
+                <div className="supervisor-heading-info">
+                  <strong>{group.supervisor}</strong>
+                  <span>{group.agents.length} agents / {drawGroups.length} draw groups</span>
+                </div>
+                <button
+                  type="button"
+                  className="supervisor-heading-statement-btn"
+                  onClick={() => setStatementModalGroup(group)}
+                  title={`Open official financial statement for ${group.supervisor}`}
+                >
+                  <Icon name="fileText" size={13} />
+                  <span>{reportViewMode === 'statement' ? 'Print Statement' : 'Statement View'}</span>
+                </button>
+              </div>
+              {reportViewMode === 'statement' ? (
+                <SupervisorStatementTable group={group} selectedDate={selectedDate} branchName={branchName} />
+              ) : (
+                <MatrixTable group={group} showOverall={showOverall} />
+              )}
             </section>)}</div>}
           </section>}
 
@@ -672,6 +1189,17 @@ function App() {
           </>}
         </section>
       </main>
+
+      {statementModalGroup && (
+        <SupervisorStatementModal
+          group={statementModalGroup}
+          selectedDate={selectedDate}
+          allSupervisors={supervisorReports}
+          branchName={branchName}
+          onClose={() => setStatementModalGroup(null)}
+          onSelectSupervisor={(newGroup) => setStatementModalGroup(newGroup)}
+        />
+      )}
     </div>
   )
 }
