@@ -18,10 +18,33 @@ function formatDate(date) {
   return `${date.getFullYear()}-${month}-${day}`
 }
 
+function getPreviousDate(dateValue) {
+  const date = new Date(`${dateValue}T00:00:00`)
+  date.setDate(date.getDate() - 1)
+  return formatDate(date)
+}
+
 function getNextDate(dateValue) {
   const nextDate = new Date(`${dateValue}T00:00:00`)
   nextDate.setDate(nextDate.getDate() + 1)
   return formatDate(nextDate)
+}
+
+function getYesterdayDate() {
+  return getPreviousDate(getCurrentDate())
+}
+
+function formatDisplayDate(dateValue) {
+  if (!dateValue) return '—'
+  const today = getCurrentDate()
+  const yesterday = getYesterdayDate()
+  const date = new Date(`${dateValue}T00:00:00`)
+  const options = { month: 'short', day: 'numeric', year: 'numeric', weekday: 'short' }
+  const formatted = date.toLocaleDateString('en-US', options)
+
+  if (dateValue === today) return `Today (${formatted})`
+  if (dateValue === yesterday) return `Yesterday (${formatted})`
+  return formatted
 }
 
 const defaultFromDate = getCurrentDate()
@@ -79,6 +102,12 @@ function Icon({ name, size = 18 }) {
     fields: <><path d="M7 5h10M7 12h10M7 19h10" /><circle cx="4" cy="5" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="19" r="1" /></>,
     check: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></>,
     refresh: <><path d="M20 11a8 8 0 0 0-14.7-3L3 11" /><path d="M3 5v6h6" /><path d="M4 13a8 8 0 0 0 14.7 3L21 13" /><path d="M21 19v-6h-6" /></>,
+    chevronLeft: <path d="m15 18-6-6 6-6" />,
+    chevronRight: <path d="m9 18 6-6-6-6" />,
+    calendar: <><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>,
+    history: <><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5M12 7v5l4 2" /></>,
+    user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
+    users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
   }
   return <svg className="ui-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
@@ -166,24 +195,88 @@ function getSupervisorCarryoverTotal(group) {
 }
 
 function getThirdDrawCarryover(agent) {
-  return getGroupedNet(agent, drawGroups[1]) + getGroupedDrawTotal(agent, drawGroups[2], 'gross')
+  const secondDrawNet = getGroupedNet(agent, drawGroups[1])
+  const thirdDrawGross = getGroupedDrawTotal(agent, drawGroups[2], 'gross')
+  return Math.max(secondDrawNet, 0) + thirdDrawGross
 }
 
 function getSupervisorThirdDrawCarryover(group) {
   return group.agents.reduce((total, agent) => total + getThirdDrawCarryover(agent), 0)
 }
 
-function DrawGrossSummary({ rows }) {
-  const totals = drawGroups.map((group) => ({
-    ...group,
-    gross: rows.reduce((total, row) => {
-      const drawTime = formatDrawTime(row.drawTime)
-      return group.times.includes(drawTime) ? total + (Number(row.TotalOverAllGross) || 0) : total
-    }, 0),
-  }))
-  const overall = totals.reduce((total, group) => total + group.gross, 0)
+function DrawGrossSummary({ supervisorReports }) {
+  const totals = drawGroups.map((group) => {
+    let gross = 0
+    let hits = 0
+    supervisorReports.forEach((supervisorGroup) => {
+      supervisorGroup.agents.forEach((agent) => {
+        gross += getGroupedDrawTotal(agent, group, 'gross')
+        hits += getGroupedDrawTotal(agent, group, 'hits')
+      })
+    })
+    return {
+      ...group,
+      gross,
+      hits,
+    }
+  })
 
-  return <section className="draw-summary" aria-label="Total gross per draw summary"><div className="draw-summary-heading"><div><strong>Total gross per draw</strong><span>Source comparison summary</span></div><strong>{formatAmount(overall)} overall</strong></div><div className="draw-summary-grid">{totals.map((group) => <div className={`draw-summary-card draw-${group.key}`} key={group.key}><span>{group.label}</span><small>{group.schedule}</small><strong>{formatAmount(group.gross)}</strong></div>)}</div></section>
+  const overallGross = totals.reduce((total, group) => total + group.gross, 0)
+  const overallHits = totals.reduce((total, group) => total + group.hits, 0)
+  const overallCommission = supervisorReports.reduce(
+    (total, group) => total + group.agents.reduce((agentTotal, agent) => agentTotal + (agent.totalGross * 0.1), 0),
+    0
+  )
+  const overallNetSales = overallGross - (overallHits + overallCommission)
+
+  return (
+    <section className="draw-summary" aria-label="Total gross and hits per draw summary">
+      <div className="draw-summary-heading">
+        <div>
+          <strong>Total gross &amp; hits per draw</strong>
+          <span>Consolidated from frontend supervisor rows</span>
+        </div>
+        <div className="draw-summary-heading-totals">
+          <div className="summary-total-chip gross-chip">
+            <small>Overall Gross</small>
+            <strong>{formatAmount(overallGross)}</strong>
+          </div>
+          <div className="summary-total-chip hits-chip">
+            <small>Overall Hits</small>
+            <strong>{formatAmount(overallHits)}</strong>
+          </div>
+          <div className="summary-total-chip commission-chip">
+            <small>Commission</small>
+            <strong>{formatAmount(overallCommission)}</strong>
+          </div>
+          <div className={`summary-total-chip net-sales-chip ${overallNetSales < 0 ? 'negative-val' : ''}`}>
+            <small>Net Sales</small>
+            <strong>{formatAmount(overallNetSales)}</strong>
+          </div>
+        </div>
+      </div>
+      <div className="draw-summary-grid">
+        {totals.map((group) => (
+          <div className={`draw-summary-card draw-${group.key}`} key={group.key}>
+            <div className="draw-card-header">
+              <span className="draw-card-label">{group.label}</span>
+              <small className="draw-card-schedule">{group.schedule}</small>
+            </div>
+            <div className="draw-card-values">
+              <div className="draw-value-col">
+                <small>Gross</small>
+                <strong className="draw-gross-num">{formatAmount(group.gross)}</strong>
+              </div>
+              <div className="draw-value-col">
+                <small>Hits</small>
+                <strong className="draw-hits-num">{formatAmount(group.hits)}</strong>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
 }
 
 function MatrixTable({ group }) {
@@ -227,7 +320,7 @@ function MatrixTable({ group }) {
             <td className="draw-cell draw-commission"><strong>{formatAmount(agent.totalGross * 0.1)}</strong></td><td className={`draw-cell draw-net-sales ${getGroupedNet(agent, drawGroups[2]) - (agent.totalGross * 0.1) < 0 ? 'negative-value' : ''}`}><strong>{formatAmount(getGroupedNet(agent, drawGroups[2]) - (agent.totalGross * 0.1))}</strong></td><td className="draw-cell draw-overall"><strong>{formatAmount(agent.totalGross)}</strong></td><td className="draw-cell draw-overall"><strong>{formatAmount(agent.totalHits)}</strong></td><td className="draw-cell draw-overall net-cell"><strong>{formatAmount(agent.totalGross - agent.totalHits)}</strong></td>
           </tr>)}
           <tr className="total-row">
-            <td><strong>Supervisor total</strong></td>
+            <td className="agent-name-cell total-agent-cell"><strong>Supervisor total</strong></td>
             {drawGroups.flatMap((drawGroup) => {
               const gross = group.agents.reduce((total, agent) => total + getGroupedDrawTotal(agent, drawGroup, 'gross'), 0)
               const hits = group.agents.reduce((total, agent) => total + getGroupedDrawTotal(agent, drawGroup, 'hits'), 0)
@@ -260,10 +353,15 @@ function App() {
   const [error, setError] = useState('')
   const [supervisorRows, setSupervisorRows] = useState([])
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [fromDate, setFromDate] = useState(defaultFromDate)
+  const [selectedDate, setSelectedDate] = useState(defaultFromDate)
   const [activeView, setActiveView] = useState('overview')
+  const [selectedSupervisor, setSelectedSupervisor] = useState('all')
 
-  const loadReport = useCallback(async (selectedDate) => {
+  const isToday = selectedDate === getCurrentDate()
+  const isYesterday = selectedDate === getYesterdayDate()
+
+  const loadReport = useCallback(async (targetDate = selectedDate) => {
+    const queryDate = targetDate || selectedDate || getCurrentDate()
     setLoading(true)
     setError('')
 
@@ -272,31 +370,64 @@ function App() {
         ? { Authorization: `Bearer ${authorization}`, Accept: 'application/json' }
         : { Accept: 'application/json' }
       let reportRows
-      if (activeView === 'reports' && drawApiUrl && drawIds.length > 0) {
-        const [responses, supervisorResponse] = await Promise.all([Promise.all(drawIds.map(async (drawId) => {
-          const requestUrl = new URL(drawApiUrl)
-          requestUrl.searchParams.set('drawId', drawId)
-          requestUrl.searchParams.set('from', selectedDate)
-          requestUrl.searchParams.set('to', getNextDate(selectedDate))
-          const response = await fetch(requestUrl, { headers })
-          if (!response.ok) throw new Error(`Hindi ma-load ang draw ${drawId} (${response.status})`)
-          return normalizeRows(await response.json())
-        })), (() => {
-          const requestUrl = new URL(supervisorApiUrl)
-          requestUrl.searchParams.set('from', selectedDate)
-          requestUrl.searchParams.set('to', getNextDate(selectedDate))
-          return fetch(requestUrl, { headers })
-        })().then(async (response) => {
-          if (!response.ok) throw new Error(`Hindi ma-load ang supervisor names (${response.status})`)
-          return normalizeRows(await response.json())
-        })])
-        reportRows = responses.flat()
-        setSupervisorRows(supervisorResponse)
+      if (activeView === 'reports') {
+        let targetDrawIds = []
+        if (overallApiUrl) {
+          try {
+            const overallUrl = new URL(overallApiUrl)
+            overallUrl.searchParams.set('from', queryDate)
+            overallUrl.searchParams.set('to', getNextDate(queryDate))
+            const overallRes = await fetch(overallUrl, { headers })
+            if (overallRes.ok) {
+              const overallData = normalizeRows(await overallRes.json())
+              const dynamicDrawIds = overallData.map((d) => d?.id).filter(Boolean)
+              if (dynamicDrawIds.length > 0) {
+                targetDrawIds = dynamicDrawIds
+              }
+            }
+          } catch (fetchDrawsError) {
+            console.warn('Hindi makuha ang dynamic draw IDs mula sa overallApiUrl:', fetchDrawsError)
+          }
+        }
+
+        if (targetDrawIds.length === 0 && queryDate === getCurrentDate() && drawIds.length > 0) {
+          targetDrawIds = drawIds
+        }
+
+        if (drawApiUrl && targetDrawIds.length > 0) {
+          const [responses, supervisorResponse] = await Promise.all([
+            Promise.all(targetDrawIds.map(async (drawId) => {
+              const requestUrl = new URL(drawApiUrl)
+              requestUrl.searchParams.set('drawId', drawId)
+              requestUrl.searchParams.set('from', queryDate)
+              requestUrl.searchParams.set('to', getNextDate(queryDate))
+              const response = await fetch(requestUrl, { headers })
+              if (!response.ok) throw new Error(`Hindi ma-load ang draw ${drawId} (${response.status})`)
+              return normalizeRows(await response.json())
+            })),
+            supervisorApiUrl
+              ? (async () => {
+                  const requestUrl = new URL(supervisorApiUrl)
+                  requestUrl.searchParams.set('from', queryDate)
+                  requestUrl.searchParams.set('to', getNextDate(queryDate))
+                  const response = await fetch(requestUrl, { headers })
+                  if (!response.ok) throw new Error(`Hindi ma-load ang supervisor names (${response.status})`)
+                  return normalizeRows(await response.json())
+                })()
+              : Promise.resolve([])
+          ])
+
+          reportRows = responses.flat()
+          setSupervisorRows(supervisorResponse)
+        } else {
+          reportRows = []
+          setSupervisorRows([])
+        }
       } else {
         const sourceApiUrl = overallApiUrl || tellerApiUrl
         const requestUrl = new URL(sourceApiUrl)
-        requestUrl.searchParams.set('from', selectedDate)
-        requestUrl.searchParams.set('to', getNextDate(selectedDate))
+        requestUrl.searchParams.set('from', queryDate)
+        requestUrl.searchParams.set('to', getNextDate(queryDate))
         const response = await fetch(requestUrl, { headers })
         if (!response.ok) throw new Error(`Hindi ma-load ang report (${response.status})`)
         reportRows = normalizeRows(await response.json())
@@ -310,19 +441,36 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }, [activeView])
+  }, [activeView, selectedDate])
+
+  const handleDateChange = (newDate) => {
+    if (!newDate) return
+    setSelectedDate(newDate)
+    loadReport(newDate)
+  }
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => loadReport(defaultFromDate), 0)
+    const timeoutId = window.setTimeout(() => {
+      loadReport(selectedDate)
+    }, 0)
     return () => window.clearTimeout(timeoutId)
-  }, [loadReport])
+  }, [activeView, loadReport, selectedDate])
 
   const columns = getColumns(rows)
   const drawRows = rows.filter((row) => row && row.drawTime !== undefined)
   const supervisorReports = getSupervisorReports(drawRows, supervisorRows)
+
+  const activeSupervisor = (selectedSupervisor !== 'all' && supervisorReports.some((group) => group.supervisor === selectedSupervisor))
+    ? selectedSupervisor
+    : 'all'
+
+  const displayedSupervisors = activeSupervisor === 'all'
+    ? supervisorReports
+    : supervisorReports.filter((group) => group.supervisor === activeSupervisor)
+
   const hasAgentFields = drawRows.some((row) => getFirstField(row, agentFieldNames) !== null)
   const hasSupervisorFields = drawRows.some((row) => getFirstField(row, supervisorFieldNames) !== null)
-  const totalGross = drawRows.reduce((total, row) => total + (Number(row.TotalOveAllGross) || 0), 0)
+  const totalGross = drawRows.reduce((total, row) => total + (Number(row.TotalOveAllGross ?? row.TotalOverAllGross) || 0), 0)
   const sourceApiUrl = activeView === 'reports' ? tellerApiUrl : (overallApiUrl || tellerApiUrl)
   const endpointLabel = sourceApiUrl ? new URL(sourceApiUrl).pathname : 'API endpoint not configured'
 
@@ -342,28 +490,167 @@ function App() {
       <main className="main-content">
         <header className="topbar">
           <div><p className="eyebrow">ACCOUNTING / {activeView.toUpperCase()}</p><h1>{activeView === 'reports' ? 'Agent reports' : 'Overall reports'}</h1></div>
-          <div className="topbar-actions"><span className="date-label">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Connecting...'}</span><button className="refresh-button" type="button" onClick={() => loadReport(fromDate)} disabled={loading}><Icon name="refresh" size={15} /> {loading ? 'Loading' : 'Refresh'}</button><div className="avatar" aria-label="Accountant profile">AC</div></div>
+          <div className="topbar-actions"><span className="date-label">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Connecting...'}</span><button className="refresh-button" type="button" onClick={() => loadReport(selectedDate)} disabled={loading}><Icon name="refresh" size={15} /> {loading ? 'Loading' : 'Refresh'}</button><div className="avatar" aria-label="Accountant profile">AC</div></div>
         </header>
 
         <section className="content-area">
-          <div className="welcome-row"><div><h2>Good day, Accountant</h2><p>Here is the latest consolidated view from your reporting source.</p></div><span className="live-badge"><span /> Live data</span></div>
-          <form className="date-filter" onSubmit={(event) => { event.preventDefault(); loadReport(fromDate) }}>
-            <div className="date-field"><label htmlFor="target-date">Target date</label><input id="target-date" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} required /></div>
-            <span className="date-helper">Showing all draws for one day</span>
-            <button className="apply-button" type="submit" disabled={loading || !fromDate}>Show this day</button>
-          </form>
+          <div className="welcome-row">
+            <div>
+              <h2>Good day, Accountant</h2>
+              <p>
+                {isToday
+                  ? 'Here is the latest live consolidated view for today.'
+                  : `Viewing previous report for ${formatDisplayDate(selectedDate)}.`}
+              </p>
+            </div>
+            {isToday ? (
+              <span className="live-badge"><span /> Live data (Today)</span>
+            ) : (
+              <div className="history-badge-wrap">
+                <span className="history-badge"><Icon name="history" size={14} /> Previous Report</span>
+                <button type="button" className="jump-today-btn" onClick={() => handleDateChange(getCurrentDate())}>Jump to Today</button>
+              </div>
+            )}
+          </div>
+
+          <div className="report-date-bar">
+            <div className="date-bar-left">
+              <div className="date-presets">
+                <button
+                  type="button"
+                  className={`preset-btn ${isToday ? 'active' : ''}`}
+                  onClick={() => handleDateChange(getCurrentDate())}
+                  disabled={loading}
+                >
+                  <span className="preset-dot" /> Today
+                </button>
+                <button
+                  type="button"
+                  className={`preset-btn ${isYesterday ? 'active' : ''}`}
+                  onClick={() => handleDateChange(getYesterdayDate())}
+                  disabled={loading}
+                >
+                  Yesterday
+                </button>
+              </div>
+
+              <div className="date-stepper-wrap">
+                <button
+                  type="button"
+                  className="stepper-btn"
+                  title="Previous day"
+                  onClick={() => handleDateChange(getPreviousDate(selectedDate))}
+                  disabled={loading}
+                >
+                  <Icon name="chevronLeft" size={15} />
+                </button>
+
+                <div className="date-input-group">
+                  <Icon name="calendar" size={14} />
+                  <input
+                    id="report-target-date"
+                    type="date"
+                    value={selectedDate}
+                    max={getCurrentDate()}
+                    onChange={(event) => handleDateChange(event.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className="stepper-btn"
+                  title="Next day"
+                  onClick={() => handleDateChange(getNextDate(selectedDate))}
+                  disabled={loading || isToday}
+                >
+                  <Icon name="chevronRight" size={15} />
+                </button>
+              </div>
+            </div>
+
+            <div className="date-bar-right">
+              <div className="date-info-wrap">
+                <span className="date-display-label">{formatDisplayDate(selectedDate)}</span>
+                {isToday ? (
+                  <span className="date-tag live-tag">Current date</span>
+                ) : (
+                  <span className="date-tag past-tag">Previous report</span>
+                )}
+              </div>
+              <button
+                type="button"
+                className="refresh-btn-bar"
+                onClick={() => loadReport(selectedDate)}
+                disabled={loading}
+              >
+                <Icon name="refresh" size={13} /> {loading ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+          </div>
+
           {activeView === 'overview' && <div className="metric-grid">
             <article className="metric-card accent-card"><span className="metric-icon"><Icon name="money" /></span><div><span className="metric-label">Total agent gross</span><strong>{loading ? '...' : formatCurrency(totalGross)}</strong></div><span className="metric-trend">All draws</span></article>
             <article className="metric-card"><span className="metric-icon soft"><Icon name="fields" /></span><div><span className="metric-label">Data fields</span><strong>{columns.length}</strong></div><span className="metric-trend neutral">Synced</span></article>
             <article className="metric-card"><span className="metric-icon soft"><Icon name="check" /></span><div><span className="metric-label">Connection</span><strong>{error ? 'Issue' : 'Healthy'}</strong></div><span className={`metric-trend ${error ? 'warning' : ''}`}>{error ? 'Check API' : 'Online'}</span></article>
           </div>}
 
-          {activeView === 'reports' && !loading && !error && drawRows.length > 0 && <DrawGrossSummary rows={drawRows} />}
+          {activeView === 'reports' && !loading && !error && supervisorReports.length > 0 && <DrawGrossSummary supervisorReports={supervisorReports} />}
 
           {activeView === 'reports' && !loading && !error && <section className="report-panel gross-panel supervisor-report">
-            <div className="panel-heading"><div><h2>Gross per supervisor</h2><p className="source-label">Teller performance for the selected day</p></div><span className="record-count">{supervisorReports.length} supervisors</span></div>
+            <div className="panel-heading supervisor-panel-heading">
+              <div className="panel-heading-title">
+                <h2>Gross per supervisor</h2>
+                <p className="source-label">Teller performance for {formatDisplayDate(selectedDate)}</p>
+              </div>
+              <div className="supervisor-filter-bar">
+                <div className="supervisor-filter-pills">
+                  <button
+                    type="button"
+                    className={`filter-pill-btn ${activeSupervisor === 'all' ? 'active' : ''}`}
+                    onClick={() => setSelectedSupervisor('all')}
+                    title="Show all supervisors"
+                  >
+                    <Icon name="users" size={13} />
+                    <span>All Supervisors</span>
+                    <span className="filter-count-badge">{supervisorReports.length}</span>
+                  </button>
+                </div>
+
+                <div className="supervisor-select-group">
+                  <Icon name="user" size={14} />
+                  <select
+                    id="supervisor-filter-dropdown"
+                    className="supervisor-filter-select"
+                    value={activeSupervisor}
+                    onChange={(event) => setSelectedSupervisor(event.target.value)}
+                    aria-label="Filter supervisor"
+                  >
+                    <option value="all">All Supervisors ({supervisorReports.length})</option>
+                    <optgroup label="Select Specific Supervisor">
+                      {supervisorReports.map((group) => (
+                        <option key={group.supervisor} value={group.supervisor}>
+                          {group.supervisor} ({group.agents.length} {group.agents.length === 1 ? 'agent' : 'agents'})
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+
+                {activeSupervisor !== 'all' && (
+                  <button
+                    type="button"
+                    className="reset-supervisor-filter-btn"
+                    onClick={() => setSelectedSupervisor('all')}
+                    title="Reset to all supervisors"
+                  >
+                    Show All
+                  </button>
+                )}
+              </div>
+            </div>
             {!hasAgentFields || !hasSupervisorFields ? <div className="breakdown-note">The current API response does not include {hasAgentFields ? 'supervisor' : hasSupervisorFields ? 'agent' : 'agent or supervisor'} fields, so the available gross is grouped as unspecified. The endpoint must return those fields for an attributed breakdown.</div> : null}
-            {drawRows.length === 0 ? <div className="state-message">No agent report records were returned for this date.</div> : <div className="supervisor-groups">{supervisorReports.map((group) => <section className="supervisor-group" key={group.supervisor}>
+            {drawRows.length === 0 ? <div className="state-message">No agent report records were returned for {formatDisplayDate(selectedDate)}.</div> : <div className="supervisor-groups">{displayedSupervisors.map((group) => <section className="supervisor-group" key={group.supervisor}>
               <div className="supervisor-heading"><strong>{group.supervisor}</strong><span>{group.agents.length} agents / {drawGroups.length} draw groups</span></div>
               <MatrixTable group={group} />
             </section>)}</div>}
@@ -371,15 +658,15 @@ function App() {
 
           {activeView === 'overview' && <>
           {!loading && !error && drawRows.length > 0 && <section className="report-panel gross-panel">
-            <div className="panel-heading"><div><h2>Agent gross per draw</h2><p className="source-label">Consolidated gross from the live report source</p></div><span className="record-count">{drawRows.length} draws</span></div>
+            <div className="panel-heading"><div><h2>Agent gross per draw</h2><p className="source-label">Consolidated gross for {formatDisplayDate(selectedDate)}</p></div><span className="record-count">{drawRows.length} draws</span></div>
             <div className="table-wrap"><table className="gross-table"><thead><tr><th>Draw</th><th>Agent gross</th><th>Hits</th><th>Kabig</th><th>Status</th></tr></thead><tbody>{drawRows.map((row, rowIndex) => <tr key={row.id ?? rowIndex}><td><strong>Draw {formatDrawTime(row.drawTime)}</strong></td><td className="gross-value">{formatCurrency(row.TotalOveAllGross)}</td><td>{formatCurrency(row.TotalOveAllHits)}</td><td>{formatCurrency(row.TotalOveAllKabig)}</td><td><span className="status-pill">{row.status === 2 ? 'Completed' : formatValue(row.status)}</span></td></tr>)}</tbody></table></div>
           </section>}
 
           <section className="report-panel">
             <div className="panel-heading"><div><h2>Report data</h2><p className="source-label">Source <code>{endpointLabel}</code></p></div><span className="record-count">{rows.length} {rows.length === 1 ? 'record' : 'records'}</span></div>
-            {loading && <div className="state-message"><span className="spinner" /> Fetching the latest report...</div>}
-            {error && !loading && <div className="state-message error-state"><strong>Unable to load data</strong><span>{error}</span><button type="button" onClick={loadReport}>Try again</button></div>}
-            {!loading && !error && rows.length === 0 && <div className="state-message">No report records were returned by the source API.</div>}
+            {loading && <div className="state-message"><span className="spinner" /> Fetching report for {formatDisplayDate(selectedDate)}...</div>}
+            {error && !loading && <div className="state-message error-state"><strong>Unable to load data</strong><span>{error}</span><button type="button" onClick={() => loadReport(selectedDate)}>Try again</button></div>}
+            {!loading && !error && rows.length === 0 && <div className="state-message">No report records were returned for {formatDisplayDate(selectedDate)}.</div>}
             {!loading && !error && rows.length > 0 && columns.length > 0 && <div className="table-wrap"><table><thead><tr>{columns.map((column) => <th key={column}>{column.replaceAll('_', ' ')}</th>)}</tr></thead><tbody>{rows.map((row, rowIndex) => <tr key={row.id ?? rowIndex}>{columns.map((column) => <td key={column}>{formatReportValue(row?.[column], column)}</td>)}</tr>)}</tbody></table></div>}
           </section>
           </>}
