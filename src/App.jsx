@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import LoginPage from './LoginPage'
 import './App.css'
 
 const tellerApiUrl = import.meta.env.VITE_API_URL
@@ -115,6 +116,16 @@ function Icon({ name, size = 18 }) {
     trending: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></>,
     print: <><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></>,
     fileText: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></>,
+    search: <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
+    trophy: <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.45 1-1 1H7" /><path d="M14 14.66V17c0 .55.45 1 1 1h2" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2z" /></>,
+    percent: <><line x1="19" y1="5" x2="5" y2="19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></>,
+    sparkles: <><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z" /></>,
+    chevronDown: <path d="m6 9 6 6 6-6" />,
+    chevronUp: <path d="m18 15-6-6-6 6" />,
+    lock: <><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
+    eye: <><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>,
+    eyeOff: <><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></>,
+    logOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></>,
   }
   return <svg className="ui-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
@@ -732,11 +743,596 @@ function SupervisorStatementModal({ group, selectedDate, allSupervisors = [], br
   )
 }
 
+
+function OverviewDashboard({
+  overallDraws = [],
+  supervisorReports = [],
+  selectedDate,
+  branchName,
+  loading,
+  error,
+  onViewStatement,
+  rawRows = [],
+  rawColumns = [],
+  endpointLabel,
+  onRefresh,
+}) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showRawFeed, setShowRawFeed] = useState(false)
+
+  const hasOverallData = overallDraws.length > 0
+  const totalGross = hasOverallData
+    ? overallDraws.reduce((sum, d) => sum + (Number(d.TotalOveAllGross ?? d.TotalOverAllGross) || 0), 0)
+    : supervisorReports.reduce((sum, s) => sum + s.totalGross, 0)
+
+  const totalHits = hasOverallData
+    ? overallDraws.reduce((sum, d) => sum + (Number(d.TotalOveAllHits ?? d.TotalOverAllHits) || 0), 0)
+    : supervisorReports.reduce((sum, s) => sum + s.totalHits, 0)
+
+  const totalKabig = hasOverallData
+    ? overallDraws.reduce((sum, d) => sum + (Number(d.TotalOveAllKabig ?? d.TotalOverAllKabig) || 0), 0)
+    : (totalGross - totalHits)
+
+  const totalCommission = totalGross * 0.1
+  const netRemittance = totalGross - totalHits - totalCommission
+  const payoutRate = totalGross > 0 ? ((totalHits / totalGross) * 100) : 0
+  const retentionRate = totalGross > 0 ? ((totalKabig / totalGross) * 100) : 0
+
+  const allAgents = useMemo(() => {
+    return supervisorReports.flatMap((s) =>
+      s.agents.map((a) => {
+        const netSales = a.totalNet - (a.totalGross * 0.1)
+        return {
+          ...a,
+          supervisor: s.supervisor,
+          netSales,
+          isDeficit: netSales < 0,
+        }
+      })
+    )
+  }, [supervisorReports])
+
+  const totalTellers = allAgents.length
+  const deficitTellers = allAgents.filter((a) => a.isDeficit)
+
+  const filteredSupervisors = useMemo(() => {
+    const list = supervisorReports.map((s) => {
+      const solventCount = s.agents.filter((a) => (a.totalNet - a.totalGross * 0.1) >= 0).length
+      const deficitCount = s.agents.filter((a) => (a.totalNet - a.totalGross * 0.1) < 0).length
+      const commission = s.totalGross * 0.1
+      const netRemittance = s.totalNet - commission
+      const payoutRate = s.totalGross > 0 ? ((s.totalHits / s.totalGross) * 100).toFixed(1) : '0.0'
+      return {
+        ...s,
+        solventCount,
+        deficitCount,
+        commission,
+        netRemittance,
+        payoutRate,
+        agentCount: s.agents.length,
+      }
+    }).sort((a, b) => b.totalGross - a.totalGross)
+
+    if (!searchQuery.trim()) return list
+    const q = searchQuery.toLowerCase()
+    return list.filter((s) => s.supervisor.toLowerCase().includes(q))
+  }, [supervisorReports, searchQuery])
+
+  const getDrawScheduleMeta = (rawTime) => {
+    const time = String(rawTime ?? '').trim()
+    if (time === '10:30' || time === '10:30 AM') return { time: '10:30 AM', type: 'Local STL', isLocal: true, code: '10:30' }
+    if (time === '14' || time === '14:00' || time === '2:00 PM' || time === '2:00') return { time: '2:00 PM', type: 'PCSO National', isLocal: false, code: '14' }
+    if (time === '15' || time === '15:00' || time === '3:00 PM' || time === '3:00') return { time: '3:00 PM', type: 'Local STL', isLocal: true, code: '15' }
+    if (time === '17' || time === '17:00' || time === '5:00 PM' || time === '5:00') return { time: '5:00 PM', type: 'PCSO National', isLocal: false, code: '17' }
+    if (time === '19' || time === '19:00' || time === '7:00 PM' || time === '7:00') return { time: '7:00 PM', type: 'Local STL', isLocal: true, code: '19' }
+    if (time === '21' || time === '21:00' || time === '9:00 PM' || time === '9:00') return { time: '9:00 PM', type: 'PCSO National', isLocal: false, code: '21' }
+    return { time: formatDrawTime(time), type: 'Regular Draw', isLocal: true, code: time }
+  }
+
+  return (
+    <div className="overview-dashboard-wrap">
+      <div className="overview-hero-banner">
+        <div className="overview-hero-text">
+          <h2>
+            <Icon name="gauge" size={22} />
+            Consolidated Operations Overview
+          </h2>
+          <p>
+            Executive Daily Sales, Winning Results, Payout Audits &amp; Remittance Summary for {formatDisplayDate(selectedDate)}
+          </p>
+        </div>
+        <div className="overview-hero-badges">
+          <span className="hero-pill-badge live-dot-badge">{branchName} Branch</span>
+          <span className="hero-pill-badge">{overallDraws.length > 0 ? `${overallDraws.length} Draws Completed` : 'Live Draws'}</span>
+          <span className="hero-pill-badge">{supervisorReports.length} Supervisors</span>
+          <span className="hero-pill-badge">{totalTellers} Active Tellers</span>
+        </div>
+      </div>
+
+      {error && !loading && (
+        <div className="state-message error-state">
+          <strong>Unable to load overview data</strong>
+          <span>{error}</span>
+          <button type="button" onClick={onRefresh}>Try again</button>
+        </div>
+      )}
+
+      {loading && (
+        <div className="state-message">
+          <span className="spinner" /> Loading consolidated analytics for {formatDisplayDate(selectedDate)}...
+        </div>
+      )}
+
+      <div className="overview-kpi-grid">
+        <article className="overview-kpi-card kpi-card-gross">
+          <div className="kpi-header">
+            <span className="kpi-title">Total Gross Sales</span>
+            <div className="kpi-icon-wrap"><Icon name="money" size={16} /></div>
+          </div>
+          <strong className="kpi-value-main">{loading ? '...' : formatCurrency(totalGross)}</strong>
+          <div className="kpi-subtext">
+            <span>Consolidated sales</span>
+            <span className="kpi-trend-pill pill-blue">All draws</span>
+          </div>
+        </article>
+
+        <article className="overview-kpi-card kpi-card-hits">
+          <div className="kpi-header">
+            <span className="kpi-title">Total Hits (Payouts)</span>
+            <div className="kpi-icon-wrap"><Icon name="alert" size={16} /></div>
+          </div>
+          <strong className="kpi-value-main accounting-deficit-text">{loading ? '...' : formatCurrency(totalHits)}</strong>
+          <div className="kpi-subtext">
+            <span>Payout Ratio</span>
+            <span className={`kpi-trend-pill ${payoutRate > 50 ? 'pill-amber' : 'pill-green'}`}>
+              {payoutRate.toFixed(1)}% of gross
+            </span>
+          </div>
+        </article>
+
+        <article className="overview-kpi-card kpi-card-kabig">
+          <div className="kpi-header">
+            <span className="kpi-title">House Kabig (Gross Margin)</span>
+            <div className="kpi-icon-wrap"><Icon name="trending" size={16} /></div>
+          </div>
+          <strong className="kpi-value-main" style={{ color: '#059669' }}>{loading ? '...' : formatCurrency(totalKabig)}</strong>
+          <div className="kpi-subtext">
+            <span>Gross less hits</span>
+            <span className="kpi-trend-pill pill-green">{retentionRate.toFixed(1)}% retained</span>
+          </div>
+        </article>
+
+        <article className="overview-kpi-card kpi-card-comm">
+          <div className="kpi-header">
+            <span className="kpi-title">Agent Commission</span>
+            <div className="kpi-icon-wrap"><Icon name="percent" size={16} /></div>
+          </div>
+          <strong className="kpi-value-main">{loading ? '...' : formatCurrency(totalCommission)}</strong>
+          <div className="kpi-subtext">
+            <span>10% of total gross</span>
+            <span className="kpi-trend-pill pill-blue">Standard rate</span>
+          </div>
+        </article>
+
+        <article className="overview-kpi-card kpi-card-remit">
+          <div className="kpi-header">
+            <span className="kpi-title">Net Remittance Due</span>
+            <div className="kpi-icon-wrap"><Icon name="check" size={16} /></div>
+          </div>
+          <strong className={`kpi-value-main ${netRemittance < 0 ? 'accounting-deficit-text' : ''}`}>
+            {loading ? '...' : (netRemittance < 0 ? `(${formatCurrency(Math.abs(netRemittance))})` : formatCurrency(netRemittance))}
+          </strong>
+          <div className="kpi-subtext">
+            <span>Due for settlement</span>
+            <span className="kpi-trend-pill pill-blue">Final net</span>
+          </div>
+        </article>
+      </div>
+
+      {!loading && overallDraws.length > 0 && (
+        <section className="overview-draws-section">
+          <div className="overview-section-header">
+            <div className="overview-section-title-wrap">
+              <h3><Icon name="sparkles" size={16} /> Draw Results &amp; Winnings Snapshot</h3>
+              <p>Official 3D &amp; 4D winning numbers with gross and payout margins per draw schedule</p>
+            </div>
+          </div>
+
+          <div className="overview-draws-grid">
+            {overallDraws.map((row, idx) => {
+              const meta = getDrawScheduleMeta(row.drawTime)
+              const gross = Number(row.TotalOveAllGross ?? row.TotalOverAllGross) || 0
+              const hits = Number(row.TotalOveAllHits ?? row.TotalOverAllHits) || 0
+              const kabig = Number(row.TotalOveAllKabig ?? row.TotalOverAllKabig) || (gross - hits)
+              const ratio = gross > 0 ? (hits / gross) * 100 : 0
+              const s3Digits = String(row.s3_result || '').split('')
+
+              return (
+                <div key={row.id || idx} className="draw-result-card">
+                  <div className="draw-card-top-bar">
+                    <span className="draw-time-tag">Draw {meta.time}</span>
+                    <span className={`draw-type-badge ${meta.isLocal ? 'type-local' : 'type-pcso'}`}>{meta.type}</span>
+                  </div>
+
+                  <div className="lotto-balls-row">
+                    {s3Digits.length > 0 && row.s3_result ? (
+                      s3Digits.map((d, dIdx) => (
+                        <span key={dIdx} className="lotto-ball">{d}</span>
+                      ))
+                    ) : (
+                      <span className="lotto-ball lotto-ball-empty">No S3</span>
+                    )}
+                    {row.s4_result && (
+                      <span className="lotto-ball-4d" title="4D Result">4D: {row.s4_result}</span>
+                    )}
+                  </div>
+
+                  <div className="draw-card-metrics">
+                    <div className="draw-metric-line">
+                      <span className="label">Gross:</span>
+                      <span className="val">{formatCurrency(gross)}</span>
+                    </div>
+                    <div className="draw-metric-line">
+                      <span className="label">Hits:</span>
+                      <span className="val val-hits">{formatCurrency(hits)}</span>
+                    </div>
+                    <div className="draw-metric-line">
+                      <span className="label">Kabig:</span>
+                      <span className="val val-kabig">{formatCurrency(kabig)}</span>
+                    </div>
+                    <div className="draw-ratio-bar-wrap" title={`Payout: ${ratio.toFixed(1)}%`}>
+                      <div
+                        className={`draw-ratio-bar-fill ${ratio > 50 ? 'bar-high-hits' : ''}`}
+                        style={{ width: `${Math.min(ratio, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {!loading && overallDraws.length > 0 && (
+        <div className="overview-table-card">
+          <div className="overview-table-card-header">
+            <div className="overview-table-title-group">
+              <h3>Draw-by-Draw Consolidated Performance</h3>
+              <p>Official sales volume, winning claims, payout rates, and house retention per draw</p>
+            </div>
+            <span className="record-count">{overallDraws.length} Scheduled Draws</span>
+          </div>
+
+          <div className="table-wrap">
+            <table className="modern-draw-table">
+              <thead>
+                <tr>
+                  <th>DRAW &amp; SCHEDULE</th>
+                  <th>TYPE</th>
+                  <th>WINNING NUMBER</th>
+                  <th className="num-col">GROSS SALES</th>
+                  <th className="num-col">HITS (PAYOUT)</th>
+                  <th className="num-col">PAYOUT RATIO</th>
+                  <th className="num-col">HOUSE KABIG</th>
+                  <th>STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overallDraws.map((row, idx) => {
+                  const meta = getDrawScheduleMeta(row.drawTime)
+                  const gross = Number(row.TotalOveAllGross ?? row.TotalOverAllGross) || 0
+                  const hits = Number(row.TotalOveAllHits ?? row.TotalOverAllHits) || 0
+                  const kabig = Number(row.TotalOveAllKabig ?? row.TotalOverAllKabig) || (gross - hits)
+                  const ratio = gross > 0 ? (hits / gross) * 100 : 0
+                  const s3Digits = String(row.s3_result || '').split('')
+
+                  return (
+                    <tr key={row.id || idx}>
+                      <td>
+                        <div className="draw-schedule-cell">
+                          <span>Draw {meta.time}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`draw-type-badge ${meta.isLocal ? 'type-local' : 'type-pcso'}`}>
+                          {meta.type}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {s3Digits.length > 0 && row.s3_result ? (
+                            s3Digits.map((d, dIdx) => (
+                              <span key={dIdx} className="lotto-ball" style={{ width: '22px', height: '22px', fontSize: '11px', lineHeight: '22px' }}>{d}</span>
+                            ))
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          )}
+                          {row.s4_result && <span className="lotto-ball-4d">{row.s4_result}</span>}
+                        </div>
+                      </td>
+                      <td className="num-col">₱ {formatAmount(gross)}</td>
+                      <td className={`num-col ${hits > 0 ? 'accounting-deficit-text' : ''}`}>
+                        {hits > 0 ? `₱ ${formatAmount(hits)}` : '₱ 0.00'}
+                      </td>
+                      <td className="num-col">
+                        <span className={`payout-rate-badge ${ratio > 50 ? 'rate-high' : ratio > 35 ? 'rate-med' : 'rate-low'}`}>
+                          {ratio.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="num-col" style={{ color: '#059669', fontWeight: '700' }}>
+                        ₱ {formatAmount(kabig)}
+                      </td>
+                      <td>
+                        <span className="status-beacon-live">
+                          {row.status === 2 ? 'Completed' : 'Recorded'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="modern-table-total-row">
+                  <td colSpan={3}>
+                    <strong>CONSOLIDATED DAILY DRAWS TOTAL</strong>
+                  </td>
+                  <td className="num-col">₱ {formatAmount(totalGross)}</td>
+                  <td className="num-col accounting-deficit-text">₱ {formatAmount(totalHits)}</td>
+                  <td className="num-col">
+                    <span className={`payout-rate-badge ${payoutRate > 50 ? 'rate-high' : payoutRate > 35 ? 'rate-med' : 'rate-low'}`}>
+                      {payoutRate.toFixed(1)}% Overall
+                    </span>
+                  </td>
+                  <td className="num-col" style={{ color: '#059669' }}>₱ {formatAmount(totalKabig)}</td>
+                  <td><strong>6/6 Draws</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {!loading && supervisorReports.length > 0 && (
+        <div className="overview-table-card">
+          <div className="overview-table-card-header">
+            <div className="overview-table-title-group">
+              <h3>Supervisor Remittance &amp; Performance Leaderboard</h3>
+              <p>Consolidated supervisor sales ranking, agent roster solvent status, and net remittance due</p>
+            </div>
+            <div className="table-header-controls">
+              <div className="overview-search-box">
+                <Icon name="search" size={13} />
+                <input
+                  type="text"
+                  placeholder="Search supervisor..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <span className="record-count">{filteredSupervisors.length} Supervisors</span>
+            </div>
+          </div>
+
+          <div className="table-wrap">
+            <table className="modern-spvr-table">
+              <thead>
+                <tr>
+                  <th>RANK &amp; SUPERVISOR</th>
+                  <th>AGENT ROSTER</th>
+                  <th className="num-col">TOTAL GROSS</th>
+                  <th className="num-col">HITS (PAYOUT)</th>
+                  <th className="num-col">COMMISSION (10%)</th>
+                  <th className="num-col">NET REMITTANCE</th>
+                  <th>OFFICIAL STATEMENT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSupervisors.map((spvr, idx) => {
+                  const rankClass = idx === 0 ? 'rank-gold' : idx === 1 ? 'rank-silver' : idx === 2 ? 'rank-bronze' : ''
+
+                  return (
+                    <tr key={spvr.supervisor || idx}>
+                      <td>
+                        <span className={`spvr-rank-badge ${rankClass}`}>#{idx + 1}</span>
+                        <strong style={{ color: '#0f172a' }}>{spvr.supervisor}</strong>
+                      </td>
+                      <td>
+                        <div className="spvr-agent-pills">
+                          <span className="spvr-pill-solvent" title="Solvent Agents">
+                            {spvr.solventCount} Solvent
+                          </span>
+                          {spvr.deficitCount > 0 && (
+                            <span className="spvr-pill-deficit" title="Agents with Deficit">
+                              {spvr.deficitCount} Deficit
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="num-col">₱ {formatAmount(spvr.totalGross)}</td>
+                      <td className={`num-col ${spvr.totalHits > 0 ? 'accounting-deficit-text' : ''}`}>
+                        ₱ {formatAmount(spvr.totalHits)}
+                      </td>
+                      <td className="num-col">₱ {formatAmount(spvr.commission)}</td>
+                      <td className={`num-col ${spvr.netRemittance < 0 ? 'accounting-deficit-text' : ''}`}>
+                        {spvr.netRemittance < 0 ? `(₱ ${formatAmount(Math.abs(spvr.netRemittance))})` : `₱ ${formatAmount(spvr.netRemittance)}`}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="overview-statement-btn"
+                          onClick={() => onViewStatement(spvr)}
+                          title={`View official remittance statement for ${spvr.supervisor}`}
+                        >
+                          <Icon name="fileText" size={12} />
+                          <span>View Statement</span>
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="modern-table-total-row">
+                  <td>
+                    <strong>TOTAL SUPERVISORS CONSOLIDATION</strong>
+                  </td>
+                  <td>
+                    <div className="spvr-agent-pills">
+                      <span className="spvr-pill-solvent">
+                        {supervisorReports.reduce((s, g) => s + g.agents.filter(a => (a.totalNet - a.totalGross * 0.1) >= 0).length, 0)} Solvent
+                      </span>
+                      <span className="spvr-pill-deficit">
+                        {supervisorReports.reduce((s, g) => s + g.agents.filter(a => (a.totalNet - a.totalGross * 0.1) < 0).length, 0)} Deficit
+                      </span>
+                    </div>
+                  </td>
+                  <td className="num-col">
+                    ₱ {formatAmount(supervisorReports.reduce((s, g) => s + g.totalGross, 0))}
+                  </td>
+                  <td className="num-col accounting-deficit-text">
+                    ₱ {formatAmount(supervisorReports.reduce((s, g) => s + g.totalHits, 0))}
+                  </td>
+                  <td className="num-col">
+                    ₱ {formatAmount(supervisorReports.reduce((s, g) => s + (g.totalGross * 0.1), 0))}
+                  </td>
+                  <td className="num-col">
+                    ₱ {formatAmount(supervisorReports.reduce((s, g) => s + (g.totalNet - (g.totalGross * 0.1)), 0))}
+                  </td>
+                  <td><strong>{supervisorReports.length} Statements</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {!loading && (
+        <div className="overview-analytics-split">
+          {overallDraws.length > 0 && (
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <h4>Draw Gross Share Distribution</h4>
+                <span className="date-tag live-tag">Volume Share %</span>
+              </div>
+
+              <div className="revenue-share-multi-bar">
+                {overallDraws.map((d, idx) => {
+                  const gross = Number(d.TotalOveAllGross ?? d.TotalOverAllGross) || 0
+                  const pct = totalGross > 0 ? (gross / totalGross) * 100 : 0
+                  return (
+                    <div
+                      key={d.id || idx}
+                      className={`rev-bar-seg rev-seg-${(idx % 6) + 1}`}
+                      style={{ width: `${pct}%` }}
+                      title={`Draw ${getDrawScheduleMeta(d.drawTime).time}: ${pct.toFixed(1)}% (₱${formatAmount(gross)})`}
+                    />
+                  )
+                })}
+              </div>
+
+              <div className="rev-share-legends">
+                {overallDraws.map((d, idx) => {
+                  const meta = getDrawScheduleMeta(d.drawTime)
+                  const gross = Number(d.TotalOveAllGross ?? d.TotalOverAllGross) || 0
+                  const pct = totalGross > 0 ? (gross / totalGross) * 100 : 0
+                  return (
+                    <div key={d.id || idx} className="rev-legend-item">
+                      <span className="rev-legend-label">
+                        <span className={`rev-legend-dot rev-seg-${(idx % 6) + 1}`} />
+                        <span>Draw {meta.time}</span>
+                      </span>
+                      <span className="rev-legend-val">{pct.toFixed(1)}%</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="analytics-card">
+            <div className="analytics-card-header">
+              <h4>Field Health &amp; Deficit Watchlist</h4>
+              <span className="date-tag past-tag">{deficitTellers.length} Deficit Tellers</span>
+            </div>
+
+            {deficitTellers.length === 0 ? (
+              <div className="state-message" style={{ padding: '16px', fontSize: '12px' }}>
+                ✓ All active tellers are solvent with positive balances today.
+              </div>
+            ) : (
+              <div className="deficit-watchlist-list">
+                {deficitTellers.slice(0, 5).map((agent, idx) => (
+                  <div key={idx} className="deficit-watch-row">
+                    <div>
+                      <span className="deficit-watch-agent">{agent.teller}</span>
+                      <span className="deficit-watch-spvr">({agent.supervisor})</span>
+                    </div>
+                    <span className="deficit-watch-amount">
+                      ({formatAmount(Math.abs(agent.netSales))})
+                    </span>
+                  </div>
+                ))}
+                {deficitTellers.length > 5 && (
+                  <small style={{ color: '#64748b', textAlign: 'center', marginTop: '4px' }}>
+                    + {deficitTellers.length - 5} more deficit tellers recorded in supervisor statements
+                  </small>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="raw-feed-accordion">
+        <button
+          type="button"
+          className="raw-feed-toggle-btn"
+          onClick={() => setShowRawFeed(!showRawFeed)}
+        >
+          <span>Source API Technical Feed ({rawRows.length} raw records from {endpointLabel})</span>
+          <Icon name={showRawFeed ? 'chevronUp' : 'chevronDown'} size={14} />
+        </button>
+        {showRawFeed && (
+          <div style={{ padding: '14px', borderTop: '1px solid #e2e8f0' }}>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    {rawColumns.map((col) => (
+                      <th key={col}>{col.replaceAll('_', ' ')}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rawRows.slice(0, 50).map((row, rIdx) => (
+                    <tr key={row.id ?? rIdx}>
+                      {rawColumns.map((col) => (
+                        <td key={col}>{formatReportValue(row?.[col], col)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {rawRows.length > 50 && (
+                <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
+                  Showing first 50 of {rawRows.length} records.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [supervisorRows, setSupervisorRows] = useState([])
+  const [overallDraws, setOverallDraws] = useState([])
   const [lastUpdated, setLastUpdated] = useState(null)
   const [selectedDate, setSelectedDate] = useState(defaultFromDate)
   const [activeView, setActiveView] = useState('overview')
@@ -744,6 +1340,21 @@ function App() {
   const [showOverall, setShowOverall] = useState(false)
   const [reportViewMode, setReportViewMode] = useState('matrix')
   const [statementModalGroup, setStatementModalGroup] = useState(null)
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('luckybet_user') || sessionStorage.getItem('luckybet_user')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
+
+  const handleLogout = () => {
+    localStorage.removeItem('luckybet_user')
+    localStorage.removeItem('luckybet_token')
+    sessionStorage.removeItem('luckybet_user')
+    setCurrentUser(null)
+  }
 
   const isToday = selectedDate === getCurrentDate()
   const isYesterday = selectedDate === getYesterdayDate()
@@ -754,82 +1365,89 @@ function App() {
     setError('')
 
     try {
-      const headers = authorization
-        ? { Authorization: `Bearer ${authorization}`, Accept: 'application/json' }
+      const effectiveToken = currentUser?.token || authorization
+      const headers = effectiveToken
+        ? { Authorization: `Bearer ${effectiveToken}`, Accept: 'application/json' }
         : { Accept: 'application/json' }
-      let reportRows
-      if (activeView === 'reports') {
-        let targetDrawIds = []
-        if (overallApiUrl) {
-          try {
-            const overallUrl = new URL(overallApiUrl)
-            overallUrl.searchParams.set('from', queryDate)
-            overallUrl.searchParams.set('to', getNextDate(queryDate))
-            const overallRes = await fetch(overallUrl, { headers })
-            if (overallRes.ok) {
-              const overallData = normalizeRows(await overallRes.json())
-              const dynamicDrawIds = overallData.map((d) => d?.id).filter(Boolean)
-              if (dynamicDrawIds.length > 0) {
-                targetDrawIds = dynamicDrawIds
-              }
-            }
-          } catch (fetchDrawsError) {
-            console.warn('Hindi makuha ang dynamic draw IDs mula sa overallApiUrl:', fetchDrawsError)
+
+      let overallData = []
+      let dynamicDrawIds = []
+
+      if (overallApiUrl) {
+        try {
+          const overallUrl = new URL(overallApiUrl)
+          overallUrl.searchParams.set('from', queryDate)
+          overallUrl.searchParams.set('to', getNextDate(queryDate))
+          const overallRes = await fetch(overallUrl, { headers })
+          if (overallRes.ok) {
+            overallData = normalizeRows(await overallRes.json())
+            dynamicDrawIds = overallData.map((d) => d?.id).filter(Boolean)
           }
+        } catch (fetchDrawsError) {
+          console.warn('Hindi makuha ang dynamic draw IDs mula sa overallApiUrl:', fetchDrawsError)
         }
+      }
 
-        if (targetDrawIds.length === 0 && queryDate === getCurrentDate() && drawIds.length > 0) {
-          targetDrawIds = drawIds
-        }
+      setOverallDraws(overallData)
 
-        if (drawApiUrl && targetDrawIds.length > 0) {
-          const [responses, supervisorResponse] = await Promise.all([
-            Promise.all(targetDrawIds.map(async (drawId) => {
-              const requestUrl = new URL(drawApiUrl)
-              requestUrl.searchParams.set('drawId', drawId)
-              requestUrl.searchParams.set('from', queryDate)
-              requestUrl.searchParams.set('to', getNextDate(queryDate))
-              const response = await fetch(requestUrl, { headers })
-              if (!response.ok) throw new Error(`Hindi ma-load ang draw ${drawId} (${response.status})`)
-              return normalizeRows(await response.json())
-            })),
-            supervisorApiUrl
-              ? (async () => {
-                  const requestUrl = new URL(supervisorApiUrl)
-                  requestUrl.searchParams.set('from', queryDate)
-                  requestUrl.searchParams.set('to', getNextDate(queryDate))
-                  const response = await fetch(requestUrl, { headers })
-                  if (!response.ok) throw new Error(`Hindi ma-load ang supervisor names (${response.status})`)
-                  return normalizeRows(await response.json())
-                })()
-              : Promise.resolve([])
-          ])
+      let targetDrawIds = dynamicDrawIds
+      if (targetDrawIds.length === 0 && queryDate === getCurrentDate() && drawIds.length > 0) {
+        targetDrawIds = drawIds
+      }
 
-          reportRows = responses.flat()
-          setSupervisorRows(supervisorResponse)
-        } else {
-          reportRows = []
-          setSupervisorRows([])
-        }
+      let reportRows = []
+      if (drawApiUrl && targetDrawIds.length > 0) {
+        const [responses, supervisorResponse] = await Promise.all([
+          Promise.all(targetDrawIds.map(async (drawId) => {
+            const requestUrl = new URL(drawApiUrl)
+            requestUrl.searchParams.set('drawId', drawId)
+            requestUrl.searchParams.set('from', queryDate)
+            requestUrl.searchParams.set('to', getNextDate(queryDate))
+            const response = await fetch(requestUrl, { headers })
+            if (!response.ok) throw new Error(`Hindi ma-load ang draw ${drawId} (${response.status})`)
+            return normalizeRows(await response.json())
+          })),
+          supervisorApiUrl
+            ? (async () => {
+                const requestUrl = new URL(supervisorApiUrl)
+                requestUrl.searchParams.set('from', queryDate)
+                requestUrl.searchParams.set('to', getNextDate(queryDate))
+                const response = await fetch(requestUrl, { headers })
+                if (!response.ok) throw new Error(`Hindi ma-load ang supervisor names (${response.status})`)
+                return normalizeRows(await response.json())
+              })()
+            : Promise.resolve([])
+        ])
+
+        reportRows = responses.flat()
+        setSupervisorRows(supervisorResponse)
+      } else if (overallData.length > 0) {
+        reportRows = overallData
+        setSupervisorRows([])
       } else {
-        const sourceApiUrl = overallApiUrl || tellerApiUrl
-        const requestUrl = new URL(sourceApiUrl)
-        requestUrl.searchParams.set('from', queryDate)
-        requestUrl.searchParams.set('to', getNextDate(queryDate))
-        const response = await fetch(requestUrl, { headers })
-        if (!response.ok) throw new Error(`Hindi ma-load ang report (${response.status})`)
-        reportRows = normalizeRows(await response.json())
+        const sourceApiUrl = tellerApiUrl
+        if (sourceApiUrl) {
+          const requestUrl = new URL(sourceApiUrl)
+          requestUrl.searchParams.set('from', queryDate)
+          requestUrl.searchParams.set('to', getNextDate(queryDate))
+          const response = await fetch(requestUrl, { headers })
+          if (!response.ok) throw new Error(`Hindi ma-load ang report (${response.status})`)
+          reportRows = normalizeRows(await response.json())
+        }
         setSupervisorRows([])
       }
+
       setRows(reportRows)
       setLastUpdated(new Date())
     } catch (requestError) {
       setError(requestError.message || 'May problema sa pagkuha ng report.')
       setRows([])
+      setSupervisorRows([])
+      setOverallDraws([])
     } finally {
       setLoading(false)
     }
-  }, [activeView, selectedDate])
+  }, [currentUser, selectedDate])
 
   const handleDateChange = (newDate) => {
     if (!newDate) return
@@ -838,11 +1456,12 @@ function App() {
   }
 
   useEffect(() => {
+    if (!currentUser) return
     const timeoutId = window.setTimeout(() => {
       loadReport(selectedDate)
     }, 0)
     return () => window.clearTimeout(timeoutId)
-  }, [activeView, loadReport, selectedDate])
+  }, [activeView, currentUser, loadReport, selectedDate])
 
   const branchName = (!import.meta.env.VITE_BRANCH_NAME && rows.find((r) => r?.location || r?.branch || r?.branchName)?.location) || configuredBranch
 
@@ -860,9 +1479,12 @@ function App() {
 
   const hasAgentFields = drawRows.some((row) => getFirstField(row, agentFieldNames) !== null)
   const hasSupervisorFields = drawRows.some((row) => getFirstField(row, supervisorFieldNames) !== null)
-  const totalGross = drawRows.reduce((total, row) => total + (Number(row.TotalOveAllGross ?? row.TotalOverAllGross) || 0), 0)
   const sourceApiUrl = activeView === 'reports' ? tellerApiUrl : (overallApiUrl || tellerApiUrl)
   const endpointLabel = sourceApiUrl ? new URL(sourceApiUrl).pathname : 'API endpoint not configured'
+
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={(user) => setCurrentUser(user)} branchName={branchName} />
+  }
 
   return (
     <div className="app-shell">
@@ -880,7 +1502,13 @@ function App() {
           <button className={`nav-item ${activeView === 'reports' ? 'active' : ''}`} type="button" onClick={() => setActiveView('reports')}><span className="nav-icon"><Icon name="reports" /></span> Reports</button>
           <button className="nav-item" type="button"><span className="nav-icon"><Icon name="activity" /></span> Activity</button>
         </nav>
-        <div className="sidebar-footer"><div className="status-dot" /><div><strong>System connected</strong><span>Live API source</span></div></div>
+        <div className="sidebar-footer">
+          <div className="status-dot" />
+          <div>
+            <strong>{currentUser?.name || 'System connected'}</strong>
+            <span>{currentUser?.role || 'Live API source'}</span>
+          </div>
+        </div>
       </aside>
 
       <main className="main-content">
@@ -891,7 +1519,28 @@ function App() {
             </p>
             <h1>{activeView === 'reports' ? 'Agent reports' : 'Overall reports'}</h1>
           </div>
-          <div className="topbar-actions"><span className="date-label">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Connecting...'}</span><button className="refresh-button" type="button" onClick={() => loadReport(selectedDate)} disabled={loading}><Icon name="refresh" size={15} /> {loading ? 'Loading' : 'Refresh'}</button><div className="avatar" aria-label="Accountant profile">AC</div></div>
+          <div className="topbar-actions">
+            <span className="date-label">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Connecting...'}</span>
+            <button className="refresh-button" type="button" onClick={() => loadReport(selectedDate)} disabled={loading}><Icon name="refresh" size={15} /> {loading ? 'Loading' : 'Refresh'}</button>
+            <div className="user-profile-widget">
+              <div className="avatar" aria-label="User profile">
+                {currentUser?.username ? currentUser.username.substring(0, 2).toUpperCase() : 'AC'}
+              </div>
+              <div className="user-info-text">
+                <span className="user-display-name">{currentUser?.name || 'Accountant'}</span>
+                <span className="user-display-role">{currentUser?.role || 'Accounting'}</span>
+              </div>
+              <button
+                type="button"
+                className="logout-trigger-btn"
+                onClick={handleLogout}
+                title="Sign out of Lucky Betplay"
+              >
+                <Icon name="logOut" size={13} />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
         </header>
 
         <section className="content-area">
@@ -990,11 +1639,21 @@ function App() {
             </div>
           </div>
 
-          {activeView === 'overview' && <div className="metric-grid">
-            <article className="metric-card accent-card"><span className="metric-icon"><Icon name="money" /></span><div><span className="metric-label">Total agent gross</span><strong>{loading ? '...' : formatCurrency(totalGross)}</strong></div><span className="metric-trend">All draws</span></article>
-            <article className="metric-card"><span className="metric-icon soft"><Icon name="fields" /></span><div><span className="metric-label">Data fields</span><strong>{columns.length}</strong></div><span className="metric-trend neutral">Synced</span></article>
-            <article className="metric-card"><span className="metric-icon soft"><Icon name="check" /></span><div><span className="metric-label">Connection</span><strong>{error ? 'Issue' : 'Healthy'}</strong></div><span className={`metric-trend ${error ? 'warning' : ''}`}>{error ? 'Check API' : 'Online'}</span></article>
-          </div>}
+          {activeView === 'overview' && (
+            <OverviewDashboard
+              overallDraws={overallDraws}
+              supervisorReports={supervisorReports}
+              selectedDate={selectedDate}
+              branchName={branchName}
+              loading={loading}
+              error={error}
+              onViewStatement={(group) => setStatementModalGroup(group)}
+              rawRows={rows}
+              rawColumns={columns}
+              endpointLabel={endpointLabel}
+              onRefresh={() => loadReport(selectedDate)}
+            />
+          )}
 
           {activeView === 'reports' && !loading && !error && supervisorReports.length > 0 && <DrawGrossSummary supervisorReports={supervisorReports} />}
 
@@ -1132,21 +1791,6 @@ function App() {
               )}
             </section>)}</div>}
           </section>}
-
-          {activeView === 'overview' && <>
-          {!loading && !error && drawRows.length > 0 && <section className="report-panel gross-panel">
-            <div className="panel-heading"><div><h2>Agent gross per draw</h2><p className="source-label">Consolidated gross for {formatDisplayDate(selectedDate)}</p></div><span className="record-count">{drawRows.length} draws</span></div>
-            <div className="table-wrap"><table className="gross-table"><thead><tr><th>Draw</th><th>Agent gross</th><th>Hits</th><th>Kabig</th><th>Status</th></tr></thead><tbody>{drawRows.map((row, rowIndex) => <tr key={row.id ?? rowIndex}><td><strong>Draw {formatDrawTime(row.drawTime)}</strong></td><td className="gross-value">{formatCurrency(row.TotalOveAllGross)}</td><td>{formatCurrency(row.TotalOveAllHits)}</td><td>{formatCurrency(row.TotalOveAllKabig)}</td><td><span className="status-pill">{row.status === 2 ? 'Completed' : formatValue(row.status)}</span></td></tr>)}</tbody></table></div>
-          </section>}
-
-          <section className="report-panel">
-            <div className="panel-heading"><div><h2>Report data</h2><p className="source-label">Source <code>{endpointLabel}</code></p></div><span className="record-count">{rows.length} {rows.length === 1 ? 'record' : 'records'}</span></div>
-            {loading && <div className="state-message"><span className="spinner" /> Fetching report for {formatDisplayDate(selectedDate)}...</div>}
-            {error && !loading && <div className="state-message error-state"><strong>Unable to load data</strong><span>{error}</span><button type="button" onClick={() => loadReport(selectedDate)}>Try again</button></div>}
-            {!loading && !error && rows.length === 0 && <div className="state-message">No report records were returned for {formatDisplayDate(selectedDate)}.</div>}
-            {!loading && !error && rows.length > 0 && columns.length > 0 && <div className="table-wrap"><table><thead><tr>{columns.map((column) => <th key={column}>{column.replaceAll('_', ' ')}</th>)}</tr></thead><tbody>{rows.map((row, rowIndex) => <tr key={row.id ?? rowIndex}>{columns.map((column) => <td key={column}>{formatReportValue(row?.[column], column)}</td>)}</tr>)}</tbody></table></div>}
-          </section>
-          </>}
         </section>
       </main>
 

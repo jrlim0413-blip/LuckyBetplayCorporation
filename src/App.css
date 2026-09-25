@@ -1246,6 +1246,750 @@ button { font: inherit; }
 }
 
 /* ==========================================================================
+   MODERN EXECUTIVE OVERVIEW DASHBOARD & ANALYTICS
+   ========================================================================== */
+
+.overview-dashboard-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-bottom: 24px;
+}
+
+/* Executive Banner */
+.overview-hero-banner {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f2b48 100%);
+  border-radius: 12px;
+  padding: 20px 24px;
+  color: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.overview-hero-text h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.overview-hero-text p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.overview-hero-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hero-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: #e2e8f0;
+  backdrop-filter: blur(4px);
+}
+
+.hero-pill-badge.live-dot-badge::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+/* 5-Card Executive KPI Grid */
+.overview-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.overview-kpi-card {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 16px 18px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.overview-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.overview-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.kpi-card-gross::before { background: linear-gradient(90deg, #2563eb, #3b82f6); }
+.kpi-card-hits::before { background: linear-gradient(90deg, #ea580c, #f97316); }
+.kpi-card-kabig::before { background: linear-gradient(90deg, #059669, #10b981); }
+.kpi-card-comm::before { background: linear-gradient(90deg, #4f46e5, #6366f1); }
+.kpi-card-remit::before { background: linear-gradient(90deg, #0f172a, #2563eb); }
+
+.kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.kpi-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+}
+
+.kpi-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.kpi-card-gross .kpi-icon-wrap { background: #eff6ff; color: #2563eb; }
+.kpi-card-hits .kpi-icon-wrap { background: #fff7ed; color: #ea580c; }
+.kpi-card-kabig .kpi-icon-wrap { background: #ecfdf5; color: #059669; }
+.kpi-card-comm .kpi-icon-wrap { background: #eef2ff; color: #4f46e5; }
+.kpi-card-remit .kpi-icon-wrap { background: #f8fafc; color: #0f172a; }
+
+.kpi-value-main {
+  font: 800 21px/1.2 'Manrope', sans-serif;
+  color: #0f172a;
+  letter-spacing: -0.4px;
+}
+
+.kpi-subtext {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kpi-trend-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.pill-green { background: #dcfce7; color: #15803d; }
+.pill-amber { background: #fef3c7; color: #b45309; }
+.pill-blue { background: #dbeafe; color: #1d4ed8; }
+
+/* Draws Results & Winning Strip */
+.overview-draws-section {
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  padding: 16px 20px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+}
+
+.overview-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.overview-section-title-wrap h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.overview-section-title-wrap p {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.overview-draws-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.draw-result-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.draw-result-card:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+}
+
+.draw-card-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.draw-time-tag {
+  font: 800 12px 'Manrope', sans-serif;
+  color: #0f172a;
+}
+
+.draw-type-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.type-local { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.type-pcso { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+
+/* 3D Lottery Ball Badges */
+.lotto-balls-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.lotto-ball {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fef08a 0%, #eab308 60%, #a16207 100%);
+  color: #000000;
+  font: 900 13px/28px 'Manrope', sans-serif;
+  text-align: center;
+  box-shadow: inset -2px -2px 4px rgba(0, 0, 0, 0.3), 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.lotto-ball-empty {
+  background: #e2e8f0;
+  color: #94a3b8;
+  box-shadow: none;
+  font-size: 11px;
+}
+
+.lotto-ball-4d {
+  font-size: 9.5px;
+  font-weight: 800;
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #c7d2fe;
+}
+
+.draw-card-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 6px;
+}
+
+.draw-metric-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.draw-metric-line .label { color: #64748b; }
+.draw-metric-line .val { font-family: 'Manrope', sans-serif; font-weight: 700; color: #0f172a; }
+.draw-metric-line .val-hits { color: #dc2626; }
+.draw-metric-line .val-kabig { color: #16a34a; }
+
+/* Draw Mini Progress Bar */
+.draw-ratio-bar-wrap {
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.draw-ratio-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #10b981;
+}
+
+.draw-ratio-bar-fill.bar-high-hits {
+  background: #ef4444;
+}
+
+/* Modern Tables Section */
+.overview-table-card {
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+}
+
+.overview-table-card-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.overview-table-title-group h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+}
+
+.overview-table-title-group p {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.table-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.overview-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.overview-search-box input {
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: #0f172a;
+  background: transparent;
+  width: 160px;
+}
+
+/* Modern Draw Table Styling */
+.modern-draw-table,
+.modern-spvr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.modern-draw-table th,
+.modern-spvr-table th {
+  background: #f1f5f9;
+  color: #475569;
+  font: 800 10.5px 'Manrope', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 10px 14px;
+  border-bottom: 1.5px solid #cbd5e1;
+  text-align: left;
+}
+
+.modern-draw-table th.num-col,
+.modern-spvr-table th.num-col {
+  text-align: right;
+}
+
+.modern-draw-table td,
+.modern-spvr-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+
+.modern-draw-table td.num-col,
+.modern-spvr-table td.num-col {
+  text-align: right;
+  font-family: 'Manrope', sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.modern-draw-table tbody tr:hover,
+.modern-spvr-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.draw-schedule-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.payout-rate-badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.rate-low { background: #dcfce7; color: #166534; }
+.rate-med { background: #fef3c7; color: #92400e; }
+.rate-high { background: #fee2e2; color: #991b1b; }
+
+.status-beacon-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #166534;
+}
+
+.status-beacon-live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16a34a;
+}
+
+.modern-table-total-row {
+  background: #f8fafc !important;
+  border-top: 2px solid #0f172a;
+  border-bottom: 3px double #0f172a;
+}
+
+.modern-table-total-row td {
+  font: 800 12.5px 'Manrope', sans-serif !important;
+  color: #0f172a !important;
+  padding: 12px 14px !important;
+}
+
+/* Supervisor Leaderboard Styling */
+.spvr-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #475569;
+  font: 800 10.5px 'Manrope', sans-serif;
+  margin-right: 8px;
+}
+
+.rank-gold { background: #fef08a; color: #854d0e; }
+.rank-silver { background: #e2e8f0; color: #334155; }
+.rank-bronze { background: #fed7aa; color: #9a3412; }
+
+.spvr-agent-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.spvr-pill-solvent {
+  font-size: 10px;
+  font-weight: 700;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.spvr-pill-deficit {
+  font-size: 10px;
+  font-weight: 700;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecdd3;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.overview-statement-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.overview-statement-btn:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+/* Analytics Split Grid */
+.overview-analytics-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.analytics-card {
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  padding: 16px 18px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+}
+
+.analytics-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.analytics-card-header h4 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* Revenue Distribution Multi-Bar */
+.revenue-share-multi-bar {
+  display: flex;
+  height: 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+  margin-bottom: 12px;
+}
+
+.rev-bar-seg {
+  height: 100%;
+  transition: opacity 0.15s ease;
+}
+
+.rev-bar-seg:hover {
+  opacity: 0.85;
+}
+
+.rev-seg-1 { background: #3b82f6; }
+.rev-seg-2 { background: #6366f1; }
+.rev-seg-3 { background: #06b6d4; }
+.rev-seg-4 { background: #10b981; }
+.rev-seg-5 { background: #f59e0b; }
+.rev-seg-6 { background: #ef4444; }
+
+.rev-share-legends {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.rev-legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  background: #f8fafc;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #f1f5f9;
+}
+
+.rev-legend-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+}
+
+.rev-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.rev-legend-val {
+  font-weight: 700;
+  font-family: 'Manrope', sans-serif;
+  color: #0f172a;
+}
+
+/* Deficit Watchlist Mini List */
+.deficit-watchlist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deficit-watch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  border-radius: 6px;
+  font-size: 11.5px;
+}
+
+.deficit-watch-agent {
+  font-weight: 700;
+  color: #991b1b;
+}
+
+.deficit-watch-spvr {
+  font-size: 10px;
+  color: #b91c1c;
+  margin-left: 6px;
+}
+
+.deficit-watch-amount {
+  font: 800 11.5px 'Manrope', sans-serif;
+  color: #dc2626;
+}
+
+/* Raw Feed Accordion */
+.raw-feed-accordion {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.raw-feed-toggle-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  font: 700 12px 'Manrope', sans-serif;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.raw-feed-toggle-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+
+
+/* User Profile & Logout in Topbar & Sidebar */
+.user-profile-widget {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-info-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.user-display-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.user-display-role {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.logout-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.logout-trigger-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+/* ==========================================================================
    PRINT MEDIA RULES (PERFECT A4 FINANCIAL REPORT OUTPUT)
    ========================================================================== */
 
