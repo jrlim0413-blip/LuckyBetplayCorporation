@@ -552,7 +552,7 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
 
             <tr className="statement-section-divider-row statement-negative-header-row">
               <td colSpan={6} className="statement-section-heading-cell statement-negative-heading-cell">
-                <strong>NEGATIVE DEFICITS / CLAIMS (OVERHITS / MGA PALABUNOT):</strong>
+                <strong>NEGATIVE DEFICITS:</strong>
               </td>
             </tr>
 
@@ -585,7 +585,7 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
 
             <tr className="statement-subtotal-data-row statement-neg-subtotal-row">
               <td className="statement-td statement-subtotal-label-td">
-                <span className="statement-subtotal-indent statement-neg-label-indent">Total Deficits / Overhits (Subtotal)</span>
+                <span className="statement-subtotal-indent statement-neg-label-indent">Total Deficits (Subtotal)</span>
               </td>
               <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
                 <span className="accounting-currency-symbol">₱</span>
@@ -649,7 +649,7 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
                 <td className="rec-val-col">₱ {formatAmount(positiveTotals.netSales)}</td>
               </tr>
               <tr>
-                <td className="rec-text-col">Less: Total Overhit / Deficit Claims to Cover:</td>
+                <td className="rec-text-col">Less: Total Deficits to Cover:</td>
                 <td className="rec-val-col accounting-deficit-text">
                   ({formatAmount(Math.abs(negativeTotals.netSales))})
                 </td>
@@ -674,7 +674,7 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
       <div className="statement-signatures-section">
         <div className="statement-sig-column">
           <div className="statement-sig-line" />
-          <span className="statement-sig-title">PREPARED BY (SUPERVISOR - {branchName.toUpperCase()})</span>
+          <span className="statement-sig-title">SUPERVISOR - {branchName ? branchName.toUpperCase() : 'MANDAUE CITY'}</span>
           <strong className="statement-sig-name">{group.supervisor}</strong>
         </div>
         <div className="statement-sig-column">
