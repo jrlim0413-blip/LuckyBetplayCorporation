@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import './App.css'
 
 const tellerApiUrl = import.meta.env.VITE_API_URL
@@ -567,6 +567,18 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
                 <tr key={`neg-${agent.key || index}`} className="statement-data-row statement-neg-row">
                   <td className="statement-td statement-agent-td">
                     <span className="statement-agent-name">{agent.teller}</span>
+                    <div className="agent-draw-pills-row">
+                      {drawGroups.map((dg) => {
+                        const net = getGroupedDrawTotal(agent, dg, 'gross') - getGroupedDrawTotal(agent, dg, 'hits')
+                        const hits = getGroupedDrawTotal(agent, dg, 'hits')
+                        return (
+                          <span key={dg.key} className={`agent-draw-chip ${net < 0 ? 'chip-neg' : 'chip-pos'}`}>
+                            <small>{dg.label}:</small> {net < 0 ? `-${formatAmount(Math.abs(net))}` : `+${formatAmount(net)}`}
+                            {hits > 0 && <span className="chip-hit-tag">Hit</span>}
+                          </span>
+                        )
+                      })}
+                    </div>
                   </td>
                   <td className="statement-td statement-num-td">
                     {index === 0 && <span className="accounting-currency-symbol">₱</span>}
@@ -635,6 +647,112 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
           </tbody>
         </table>
       </div>
+
+      {negative.length > 0 && (
+        <div className="statement-deficits-draw-audit">
+          <div className="deficits-audit-header">
+            <div className="audit-header-title">
+              <h4 className="audit-main-title">BREAKDOWN NG MGA MAY ABONO / DEFICITS PER DRAW</h4>
+              <p className="audit-sub-title">(Draw-by-Draw Audit of Gross, Hits, and Net Deficits for Deficit Agents)</p>
+            </div>
+            <span className="audit-count-badge">{negative.length} {negative.length === 1 ? 'Deficit Agent' : 'Deficit Agents'}</span>
+          </div>
+
+          <div className="statement-table-container audit-table-container">
+            <table className="statement-deficit-draw-table">
+              <thead>
+                <tr className="audit-th-super">
+                  <th className="audit-th audit-th-agent" rowSpan={2}>DEFICIT AGENT</th>
+                  {drawGroups.map((dg) => (
+                    <th className="audit-th audit-th-draw-group" colSpan={3} key={`th-${dg.key}`}>
+                      <span className="audit-draw-label">{dg.label.toUpperCase()}</span>
+                      <small className="audit-draw-sched">{dg.schedule}</small>
+                    </th>
+                  ))}
+                  <th className="audit-th audit-th-comm" rowSpan={2}>
+                    <span>COMMISSION</span>
+                    <small>10%</small>
+                  </th>
+                  <th className="audit-th audit-th-total" rowSpan={2}>
+                    <span>NET DEFICIT</span>
+                    <small>Remittance</small>
+                  </th>
+                </tr>
+                <tr className="audit-th-sub">
+                  {drawGroups.map((dg) => (
+                    <Fragment key={`sub-${dg.key}`}>
+                      <th className="audit-th-subcol">Gross</th>
+                      <th className="audit-th-subcol">Hits</th>
+                      <th className="audit-th-subcol subcol-net">Net</th>
+                    </Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {negative.map((agent, index) => {
+                  const drawStats = drawGroups.map((dg) => {
+                    const gross = getGroupedDrawTotal(agent, dg, 'gross')
+                    const hits = getGroupedDrawTotal(agent, dg, 'hits')
+                    const net = gross - hits
+                    return { key: dg.key, gross, hits, net }
+                  })
+
+                  return (
+                    <tr key={`neg-draw-${agent.key || index}`} className="audit-data-row">
+                      <td className="audit-td audit-td-agent">
+                        <strong>{agent.teller}</strong>
+                      </td>
+                      {drawStats.map((ds) => (
+                        <Fragment key={`ds-${agent.key}-${ds.key}`}>
+                          <td className="audit-td audit-td-num">{formatAmount(ds.gross)}</td>
+                          <td className={`audit-td audit-td-num ${ds.hits > 0 ? 'audit-hits-alert' : ''}`}>
+                            {formatAmount(ds.hits)}
+                          </td>
+                          <td className={`audit-td audit-td-num audit-td-net ${ds.net < 0 ? 'accounting-deficit-text' : ''}`}>
+                            {ds.net < 0 ? `(${formatAmount(Math.abs(ds.net))})` : formatAmount(ds.net)}
+                          </td>
+                        </Fragment>
+                      ))}
+                      <td className="audit-td audit-td-num audit-td-comm">{formatAmount(agent.commission)}</td>
+                      <td className="audit-td audit-td-num audit-td-final accounting-deficit-text">
+                        <strong>({formatAmount(Math.abs(agent.netSales))})</strong>
+                      </td>
+                    </tr>
+                  )
+                })}
+
+                <tr className="audit-total-row">
+                  <td className="audit-td audit-td-agent">
+                    <strong>TOTAL DEFICIT AGENTS PER DRAW</strong>
+                  </td>
+                  {drawGroups.map((dg) => {
+                    const totalGross = negative.reduce((sum, a) => sum + getGroupedDrawTotal(a, dg, 'gross'), 0)
+                    const totalHits = negative.reduce((sum, a) => sum + getGroupedDrawTotal(a, dg, 'hits'), 0)
+                    const totalNet = totalGross - totalHits
+                    return (
+                      <Fragment key={`tot-${dg.key}`}>
+                        <td className="audit-td audit-td-num"><strong>{formatAmount(totalGross)}</strong></td>
+                        <td className={`audit-td audit-td-num ${totalHits > 0 ? 'audit-hits-alert' : ''}`}>
+                          <strong>{formatAmount(totalHits)}</strong>
+                        </td>
+                        <td className={`audit-td audit-td-num audit-td-net ${totalNet < 0 ? 'accounting-deficit-text' : ''}`}>
+                          <strong>{totalNet < 0 ? `(${formatAmount(Math.abs(totalNet))})` : formatAmount(totalNet)}</strong>
+                        </td>
+                      </Fragment>
+                    )
+                  })}
+                  <td className="audit-td audit-td-num audit-td-comm">
+                    <strong>{formatAmount(negativeTotals.commission)}</strong>
+                  </td>
+                  <td className="audit-td audit-td-num audit-td-final accounting-deficit-text">
+                    <strong>({formatAmount(Math.abs(negativeTotals.netSales))})</strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="statement-bottom-reconciliation">
         <div className="statement-reconcile-card">
