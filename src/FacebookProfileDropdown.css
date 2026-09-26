@@ -1,0 +1,556 @@
+/* src/FacebookProfileDropdown.css - Facebook-Style Profile Dropdown & Dark Mode Styling */
+
+.fb-profile-container {
+  position: relative;
+  display: inline-block;
+}
+
+/* Topbar Trigger Button */
+.fb-trigger-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 4px 12px 4px 5px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.fb-trigger-btn:hover,
+.fb-trigger-btn.active {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.fb-trigger-avatar {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font: 700 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.fb-avatar-badge-icon {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  display: grid;
+  place-items: center;
+}
+
+.fb-trigger-info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.fb-trigger-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fb-trigger-name {
+  font: 700 12.5px -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'DM Sans', sans-serif;
+  color: #0f172a;
+}
+
+.fb-trigger-perm-pill {
+  font: 700 10px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  background: #eff6ff;
+  color: #2563eb;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.2px;
+}
+
+.fb-trigger-role {
+  font: 400 11px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  color: #64748b;
+  line-height: 1.1;
+  margin-top: 1px;
+}
+
+.fb-chevron-indicator {
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease;
+}
+
+.fb-chevron-indicator.rotated {
+  transform: rotate(180deg);
+}
+
+/* Floating Popover Card (Facebook Style) */
+.fb-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 12px 28px 0 rgba(0, 0, 0, 0.18), 0 2px 4px 0 rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  z-index: 9999;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fbSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top right;
+}
+
+@keyframes fbSlideDown {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Header Active Profile Card */
+.fb-active-profile-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #f1f5f9;
+}
+
+.fb-profile-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fb-large-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  color: #ffffff;
+  font: 700 16px -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'DM Sans', sans-serif;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.25);
+}
+
+.fb-profile-details {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  min-width: 0;
+}
+
+.fb-profile-name {
+  font: 700 15px -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'DM Sans', sans-serif;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb-profile-role-sub {
+  font: 500 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.fb-profile-branch {
+  font: 500 11px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  color: #94a3b8;
+  margin-top: 1px;
+}
+
+.fb-perms-status-bar {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.fb-perms-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 11px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  color: #059669;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.fb-return-admin-btn {
+  margin-top: 10px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #b45309;
+  font: 700 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fb-return-admin-btn:hover {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Account Switcher Section (Facebook style) */
+.fb-account-switcher-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.fb-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+}
+
+.fb-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 700 11px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.fb-see-all-link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font: 600 11.5px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.fb-see-all-link:hover {
+  text-decoration: underline;
+}
+
+.fb-accounts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.fb-account-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  text-align: left;
+}
+
+.fb-account-item:hover {
+  background: #f1f5f9;
+}
+
+.fb-account-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #475569;
+  font: 700 11px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.fb-account-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fb-account-name {
+  font: 600 12.5px -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'DM Sans', sans-serif;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb-account-role {
+  font: 400 11px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb-switch-pill {
+  padding: 3px 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 6px;
+  font: 600 10.5px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  flex-shrink: 0;
+}
+
+.fb-menu-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 4px 0;
+}
+
+/* Menu Items List */
+.fb-menu-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fb-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 8px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  text-align: left;
+  user-select: none;
+}
+
+.fb-menu-item:hover {
+  background: #f1f5f9;
+}
+
+.fb-menu-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Facebook-Style Circular Icon Button on the Left */
+.fb-icon-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e4e6eb;
+  color: #050505;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.fb-icon-circle.mini {
+  width: 22px;
+  height: 22px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.fb-icon-circle.icon-darkmode { background: #f3f4f6; color: #4b5563; }
+.fb-icon-circle.icon-commissions { background: #eff6ff; color: #2563eb; }
+.fb-icon-circle.icon-rbac { background: #f5f3ff; color: #7c3aed; }
+.fb-icon-circle.icon-logs { background: #ecfdf5; color: #059669; }
+.fb-icon-circle.icon-logout { background: #fef2f2; color: #dc2626; }
+
+.fb-menu-item-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.fb-item-title {
+  font: 600 13px -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'DM Sans', sans-serif;
+  color: #0f172a;
+}
+
+.fb-item-desc {
+  font: 400 11px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.fb-item-chevron {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.fb-menu-toggle-item {
+  cursor: default;
+}
+
+.fb-menu-toggle-item:hover {
+  background: transparent;
+}
+
+.fb-menu-logout-item:hover .fb-item-title {
+  color: #dc2626;
+}
+
+.fb-dropdown-footer {
+  padding: 8px 4px 4px;
+  border-top: 1px solid #f1f5f9;
+  text-align: center;
+  font: 400 10.5px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+  color: #94a3b8;
+}
+
+/* ==========================================================================
+   DARK MODE ADAPTATION (Rich Facebook/Apple Dark Theme)
+   ========================================================================== */
+[data-theme="dark"] .fb-trigger-btn {
+  background: #242526;
+  border-color: #3a3b3c;
+  color: #e4e6eb;
+}
+
+[data-theme="dark"] .fb-trigger-btn:hover,
+[data-theme="dark"] .fb-trigger-btn.active {
+  background: #3a3b3c;
+  border-color: #4e4f50;
+}
+
+[data-theme="dark"] .fb-trigger-name {
+  color: #e4e6eb;
+}
+
+[data-theme="dark"] .fb-trigger-role {
+  color: #b0b3b8;
+}
+
+[data-theme="dark"] .fb-trigger-perm-pill {
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .fb-avatar-badge-icon {
+  background: #242526;
+  border-color: #3a3b3c;
+  color: #e4e6eb;
+}
+
+[data-theme="dark"] .fb-dropdown-menu {
+  background: #242526;
+  border-color: #3a3b3c;
+  box-shadow: 0 12px 28px 0 rgba(0, 0, 0, 0.65), 0 2px 4px 0 rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .fb-active-profile-card {
+  background: #18191a;
+  border-color: #3a3b3c;
+}
+
+[data-theme="dark"] .fb-profile-name {
+  color: #e4e6eb;
+}
+
+[data-theme="dark"] .fb-profile-role-sub {
+  color: #b0b3b8;
+}
+
+[data-theme="dark"] .fb-profile-branch {
+  color: #8a8d91;
+}
+
+[data-theme="dark"] .fb-perms-status-bar {
+  border-top-color: #3a3b3c;
+}
+
+[data-theme="dark"] .fb-return-admin-btn {
+  background: #451a03;
+  border-color: #78350f;
+  color: #fde68a;
+}
+
+[data-theme="dark"] .fb-return-admin-btn:hover {
+  background: #78350f;
+  color: #fef3c7;
+}
+
+[data-theme="dark"] .fb-account-item:hover,
+[data-theme="dark"] .fb-menu-item:hover {
+  background: #3a3b3c;
+}
+
+[data-theme="dark"] .fb-account-name,
+[data-theme="dark"] .fb-item-title {
+  color: #e4e6eb;
+}
+
+[data-theme="dark"] .fb-account-role,
+[data-theme="dark"] .fb-item-desc {
+  color: #b0b3b8;
+}
+
+[data-theme="dark"] .fb-account-avatar {
+  background: #3a3b3c;
+  color: #e4e6eb;
+}
+
+[data-theme="dark"] .fb-switch-pill {
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .fb-menu-divider,
+[data-theme="dark"] .fb-dropdown-footer {
+  background: #3a3b3c;
+  border-color: #3a3b3c;
+}
+
+[data-theme="dark"] .fb-icon-circle {
+  background: #3a3b3c;
+  color: #e4e6eb;
+}
+
+[data-theme="dark"] .fb-icon-circle.mini {
+  background: #3a3b3c;
+  color: #b0b3b8;
+}
+
+[data-theme="dark"] .fb-icon-circle.icon-darkmode { background: #3a3b3c; color: #fbbf24; }
+[data-theme="dark"] .fb-icon-circle.icon-commissions { background: #1e3a5f; color: #60a5fa; }
+[data-theme="dark"] .fb-icon-circle.icon-rbac { background: #2e1065; color: #a78bfa; }
+[data-theme="dark"] .fb-icon-circle.icon-logs { background: #064e3b; color: #34d399; }
+[data-theme="dark"] .fb-icon-circle.icon-logout { background: #450a0a; color: #f87171; }

@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import LoginPage from './LoginPage'
 import RbacManagementView from './RbacManagementView'
+import CommissionManagementView from './CommissionManagementView'
+import FacebookProfileDropdown from './FacebookProfileDropdown'
+import { loadCommissionSettings, getAgentCommissionRate } from './commissions'
 import { signOutFromSupabase } from './supabase'
+import {
+  getRbacRoles,
+  getRbacUsers,
+  getUserEffectivePermissions,
+  hasPermission,
+  PERMISSIONS,
+  DEFAULT_ROLES,
+  DEFAULT_USERS,
+} from './rbac'
 import './App.css'
 
 const tellerApiUrl = import.meta.env.VITE_API_URL
@@ -99,38 +112,191 @@ function formatReportValue(value, column) {
 
 function Icon({ name, size = 18 }) {
   const paths = {
-    overview: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
-    reports: <><path d="M5 20V10" /><path d="M12 20V4" /><path d="M19 20v-7" /><path d="M3 20h18" /></>,
-    activity: <><path d="M3 12h4l2-6 4 12 2-6h6" /></>,
-    money: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="12" cy="12" r="3" /><path d="M7 9h.01M17 15h.01" /></>,
-    fields: <><path d="M7 5h10M7 12h10M7 19h10" /><circle cx="4" cy="5" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="19" r="1" /></>,
-    check: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></>,
-    refresh: <><path d="M20 11a8 8 0 0 0-14.7-3L3 11" /><path d="M3 5v6h6" /><path d="M4 13a8 8 0 0 0 14.7 3L21 13" /><path d="M21 19v-6h-6" /></>,
+    overview: (
+      <>
+        <rect x="3" y="3" width="7.5" height="7.5" rx="1.75" />
+        <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.75" />
+        <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.75" />
+        <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.75" />
+      </>
+    ),
+    reports: (
+      <>
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+        <line x1="3" y1="20" x2="21" y2="20" />
+      </>
+    ),
+    activity: (
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    ),
+    money: (
+      <>
+        <rect width="20" height="12" x="2" y="6" rx="2" />
+        <circle cx="12" cy="12" r="2" />
+        <path d="M6 12h.01M18 12h.01" />
+      </>
+    ),
+    fields: (
+      <>
+        <line x1="8" y1="6" x2="21" y2="6" />
+        <line x1="8" y1="12" x2="21" y2="12" />
+        <line x1="8" y1="18" x2="21" y2="18" />
+        <line x1="3" y1="6" x2="3.01" y2="6" />
+        <line x1="3" y1="12" x2="3.01" y2="12" />
+        <line x1="3" y1="18" x2="3.01" y2="18" />
+      </>
+    ),
+    check: (
+      <polyline points="20 6 9 17 4 12" />
+    ),
+    refresh: (
+      <>
+        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+        <path d="M16 21h5v-5" />
+      </>
+    ),
     chevronLeft: <path d="m15 18-6-6 6-6" />,
     chevronRight: <path d="m9 18 6-6-6-6" />,
-    calendar: <><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>,
-    history: <><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5M12 7v5l4 2" /></>,
-    user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
-    users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
-    close: <path d="M18 6 6 18M6 6l12 12" />,
-    alert: <><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>,
-    gauge: <><path d="M12 14v-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" /></>,
-    trending: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></>,
-    print: <><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></>,
-    fileText: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></>,
-    search: <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
-    trophy: <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.45 1-1 1H7" /><path d="M14 14.66V17c0 .55.45 1 1 1h2" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2z" /></>,
-    percent: <><line x1="19" y1="5" x2="5" y2="19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></>,
-    sparkles: <><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z" /></>,
     chevronDown: <path d="m6 9 6 6 6-6" />,
     chevronUp: <path d="m18 15-6-6-6 6" />,
-    lock: <><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
-    eye: <><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>,
-    eyeOff: <><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></>,
-    shieldCheck: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></>,
-    logOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></>,
+    calendar: (
+      <>
+        <rect width="18" height="18" x="3" y="4" rx="2.5" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </>
+    ),
+    history: (
+      <>
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <polyline points="3 3 3 8 8 8" />
+        <polyline points="12 7 12 12 15 15" />
+      </>
+    ),
+    user: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M20 21a8 8 0 0 0-16 0" />
+      </>
+    ),
+    users: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </>
+    ),
+    close: <path d="M18 6 6 18M6 6l12 12" />,
+    alert: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </>
+    ),
+    gauge: (
+      <>
+        <path d="m12 14 3-3" />
+        <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+      </>
+    ),
+    trending: (
+      <>
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+        <polyline points="16 7 22 7 22 13" />
+      </>
+    ),
+    print: (
+      <>
+        <polyline points="6 9 6 3 18 3 18 9" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <rect width="12" height="7" x="6" y="14" rx="1" />
+      </>
+    ),
+    fileText: (
+      <>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+        <line x1="10" y1="9" x2="8" y2="9" />
+      </>
+    ),
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7.5" />
+        <line x1="21" y1="21" x2="16.5" y2="16.5" />
+      </>
+    ),
+    trophy: (
+      <>
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+        <path d="M4 22h16" />
+        <path d="M10 14.66V17c0 .55-.45 1-1 1H7" />
+        <path d="M14 14.66V17c0 .55.45 1 1 1h2" />
+        <path d="M18 2H6v7a6 6 0 0 0 12 0V2z" />
+      </>
+    ),
+    percent: (
+      <>
+        <line x1="19" y1="5" x2="5" y2="19" />
+        <circle cx="6.5" cy="6.5" r="2.5" />
+        <circle cx="17.5" cy="17.5" r="2.5" />
+      </>
+    ),
+    sparkles: (
+      <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z" />
+    ),
+    lock: (
+      <>
+        <rect width="18" height="11" x="3" y="11" rx="2.5" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </>
+    ),
+    eye: (
+      <>
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+    eyeOff: (
+      <>
+        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+        <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+        <line x1="2" y1="2" x2="22" y2="22" />
+      </>
+    ),
+    shieldCheck: (
+      <>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="m9 12 2 2 4-4" />
+      </>
+    ),
+    download: (
+      <>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </>
+    ),
+    logOut: (
+      <>
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16 17 21 12 16 7" />
+        <line x1="21" y1="12" x2="9" y2="12" />
+      </>
+    ),
+    check: <polyline points="20 6 9 17 4 12" />,
   }
-  return <svg className="ui-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
+  return <svg className="ui-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 
 function getColumns(rows) {
@@ -158,7 +324,7 @@ function getFirstField(row, fieldNames) {
   return fieldName ? row[fieldName] : null
 }
 
-function getSupervisorReports(rows, supervisorRows = []) {
+function getSupervisorReports(rows, supervisorRows = [], commissionSettings = null) {
   const supervisorNames = new Map(supervisorRows.map((row) => [String(row.username), row.fullName]))
   const supervisorNamesById = new Map(supervisorRows.map((row) => [String(row.id), row.fullName]))
   const grouped = new Map()
@@ -184,13 +350,38 @@ function getSupervisorReports(rows, supervisorRows = []) {
     grouped.set(supervisor, current)
   })
 
-  return Array.from(grouped.values()).map((group) => ({
-    ...group,
-    agents: Array.from(group.agents.values()).map((agent) => ({ ...agent, totalNet: agent.totalGross - agent.totalHits, totalSalary: agent.totalGross * 0.1, totalKabig: (agent.totalGross - agent.totalHits) - (agent.totalGross * 0.1) })),
-    totalNet: group.totalGross - group.totalHits,
-    totalSalary: group.totalGross * 0.1,
-    totalKabig: (group.totalGross - group.totalHits) - (group.totalGross * 0.1),
-  }))
+  return Array.from(grouped.values()).map((group) => {
+    let groupSalary = 0
+    const agents = Array.from(group.agents.values()).map((agent) => {
+      const rateInfo = getAgentCommissionRate(group.supervisor, agent.key, commissionSettings)
+      const commissionRate = rateInfo.rate / 100
+      const totalSalary = agent.totalGross * commissionRate
+      const totalNet = agent.totalGross - agent.totalHits
+      const totalKabig = totalNet - totalSalary
+      groupSalary += totalSalary
+
+      return {
+        ...agent,
+        commissionRate: rateInfo.rate,
+        isCommissionOverride: rateInfo.isOverride,
+        supervisorDefaultRate: rateInfo.supervisorDefault,
+        totalNet,
+        totalSalary,
+        totalKabig,
+      }
+    })
+
+    const totalNet = group.totalGross - group.totalHits
+    const totalKabig = totalNet - groupSalary
+
+    return {
+      ...group,
+      agents,
+      totalNet,
+      totalSalary: groupSalary,
+      totalKabig,
+    }
+  })
 }
 
 function getGroupedDrawTotal(agent, group, field) {
@@ -245,7 +436,7 @@ function DrawGrossSummary({ supervisorReports }) {
   const overallGross = totals.reduce((total, group) => total + group.gross, 0)
   const overallHits = totals.reduce((total, group) => total + group.hits, 0)
   const overallCommission = supervisorReports.reduce(
-    (total, group) => total + group.agents.reduce((agentTotal, agent) => agentTotal + (agent.totalGross * 0.1), 0),
+    (total, group) => total + (group.totalSalary !== undefined ? group.totalSalary : group.agents.reduce((agentTotal, agent) => agentTotal + (agent.totalSalary !== undefined ? agent.totalSalary : (agent.totalGross * ((agent.commissionRate || 10) / 100))), 0)),
     0
   )
   const overallNetSales = overallGross - (overallHits + overallCommission)
@@ -303,8 +494,15 @@ function DrawGrossSummary({ supervisorReports }) {
 
 
 function MatrixTable({ group, showOverall = false }) {
+  const supervisorTotalCommission = group.totalSalary !== undefined
+    ? group.totalSalary
+    : group.agents.reduce((total, a) => total + (a.totalSalary !== undefined ? a.totalSalary : a.totalGross * ((a.commissionRate || 10) / 100)), 0)
+
+  const supervisorOverallNet = group.totalGross - group.totalHits
+  const supervisorOverallNetSales = supervisorOverallNet - supervisorTotalCommission
+
   const supervisorPositiveThirdNetSales = group.agents.reduce((total, agent) => {
-    const agentOverallCommission = agent.totalGross * 0.1
+    const agentOverallCommission = agent.totalSalary !== undefined ? agent.totalSalary : agent.totalGross * ((agent.commissionRate || 10) / 100)
     const agentThirdNetSales = getGroupedNet(agent, drawGroups[2]) - agentOverallCommission
     return total + (agentThirdNetSales > 0 ? agentThirdNetSales : 0)
   }, 0)
@@ -316,7 +514,7 @@ function MatrixTable({ group, showOverall = false }) {
           <tr>
             <th className="agent-header" rowSpan="2">Agent</th>
             {drawGroups.map((drawGroup) => <th className={`draw-group-heading draw-${drawGroup.key}`} colSpan={drawGroup.key === 'morning' ? 3 : 4} key={drawGroup.key}><span>{drawGroup.label}</span><small>{drawGroup.schedule}</small></th>)}
-            <th className="draw-group-heading draw-commission" rowSpan="2"><span>Commission</span><small>10% of Gross</small></th>
+            <th className="draw-group-heading draw-commission" rowSpan="2"><span>Commission</span><small>Rates by Supervisor</small></th>
             <th className="draw-group-heading draw-net-sales" rowSpan="2"><span>Net Sales</span><small>3rd Net - Commission</small></th>
             {showOverall && (
               <>
@@ -347,7 +545,7 @@ function MatrixTable({ group, showOverall = false }) {
         <tbody>
           {group.agents.map((agent) => {
             const agentOverallNet = agent.totalGross - agent.totalHits
-            const agentOverallCommission = agent.totalGross * 0.1
+            const agentOverallCommission = agent.totalSalary !== undefined ? agent.totalSalary : agent.totalGross * ((agent.commissionRate || 10) / 100)
             const agentOverallNetSales = agentOverallNet - agentOverallCommission
             const agentThirdNetSales = getGroupedNet(agent, drawGroups[2]) - agentOverallCommission
             return (
@@ -367,14 +565,24 @@ function MatrixTable({ group, showOverall = false }) {
                     <td className={`draw-cell draw-${drawGroup.key} net-cell ${net < 0 ? 'negative-value' : ''}`} key={`${agent.key}-${drawGroup.key}-net`}>{formatAmount(net)}</td>,
                   ]
                 })}
-                <td className="draw-cell draw-commission"><strong>{formatAmount(agentOverallCommission)}</strong></td>
+                <td className="draw-cell draw-commission">
+                  <strong>{formatAmount(agentOverallCommission)}</strong>
+                  {agent.commissionRate && (
+                    <small style={{ display: 'block', fontSize: '10px', color: '#64748b' }}>({agent.commissionRate}%)</small>
+                  )}
+                </td>
                 <td className={`draw-cell draw-net-sales ${agentThirdNetSales < 0 ? 'negative-value' : ''}`}><strong>{formatAmount(agentThirdNetSales)}</strong></td>
                 {showOverall && (
                   <>
                     <td className="draw-separator-cell" aria-hidden="true" />
                     <td className="draw-cell draw-overall"><strong>{formatAmount(agent.totalGross)}</strong></td>
                     <td className="draw-cell draw-overall"><strong>{formatAmount(agent.totalHits)}</strong></td>
-                    <td className="draw-cell draw-overall"><strong>{formatAmount(agentOverallCommission)}</strong></td>
+                    <td className="draw-cell draw-overall">
+                      <strong>{formatAmount(agentOverallCommission)}</strong>
+                      {agent.commissionRate && (
+                        <small style={{ display: 'block', fontSize: '10px', color: '#64748b' }}>({agent.commissionRate}%)</small>
+                      )}
+                    </td>
                     <td className="draw-cell draw-overall net-cell"><strong>{formatAmount(agentOverallNet)}</strong></td>
                     <td className={`draw-cell draw-overall draw-overall-net-sales ${agentOverallNetSales < 0 ? 'negative-value' : ''}`}><strong>{formatAmount(agentOverallNetSales)}</strong></td>
                   </>
@@ -402,16 +610,16 @@ function MatrixTable({ group, showOverall = false }) {
                 <td className={`draw-cell draw-${drawGroup.key} net-cell ${net < 0 ? 'negative-value' : ''}`} key={`total-${drawGroup.key}-net`}><strong>{formatAmount(net)}</strong></td>,
               ]
             })}
-            <td className="draw-cell draw-commission"><strong>{formatAmount(group.totalGross * 0.1)}</strong></td>
+            <td className="draw-cell draw-commission"><strong>{formatAmount(supervisorTotalCommission)}</strong></td>
             <td className="draw-cell draw-net-sales"><strong>{formatAmount(supervisorPositiveThirdNetSales)}</strong></td>
             {showOverall && (
               <>
                 <td className="draw-separator-cell" aria-hidden="true" />
                 <td className="draw-cell draw-overall"><strong>{formatAmount(group.totalGross)}</strong></td>
                 <td className="draw-cell draw-overall"><strong>{formatAmount(group.totalHits)}</strong></td>
-                <td className="draw-cell draw-overall"><strong>{formatAmount(group.totalGross * 0.1)}</strong></td>
-                <td className="draw-cell draw-overall net-cell"><strong>{formatAmount(group.totalGross - group.totalHits)}</strong></td>
-                <td className={`draw-cell draw-overall draw-overall-net-sales ${(group.totalGross - group.totalHits) - (group.totalGross * 0.1) < 0 ? 'negative-value' : ''}`}><strong>{formatAmount((group.totalGross - group.totalHits) - (group.totalGross * 0.1))}</strong></td>
+                <td className="draw-cell draw-overall"><strong>{formatAmount(supervisorTotalCommission)}</strong></td>
+                <td className="draw-cell draw-overall net-cell"><strong>{formatAmount(supervisorOverallNet)}</strong></td>
+                <td className={`draw-cell draw-overall draw-overall-net-sales ${supervisorOverallNetSales < 0 ? 'negative-value' : ''}`}><strong>{formatAmount(supervisorOverallNetSales)}</strong></td>
               </>
             )}
           </tr>
@@ -424,7 +632,7 @@ function MatrixTable({ group, showOverall = false }) {
 function getAgentOverallMetrics(agent) {
   const gross = Number(agent.totalGross) || 0
   const hits = Number(agent.totalHits) || 0
-  const commission = gross * 0.1
+  const commission = agent.totalSalary !== undefined ? Number(agent.totalSalary) : gross * 0.1
   const net = gross - hits
   const netSales = net - commission
   return { gross, hits, commission, net, netSales }
@@ -459,7 +667,32 @@ function calculateMetricsTotals(list = []) {
   )
 }
 
-function SupervisorStatementTable({ group, selectedDate, branchName = configuredBranch, isModal = false }) {
+function calculateAutoFitScale(agentCount) {
+  // Golden Rule: Guarantee strictly 1 A4 bond paper sheet (margin: 1.2cm 2cm 1.2cm 2cm)
+  // Safe single-sheet printable budget is ~960px.
+  // Base fixed elements (sagad sa taas header, subtotals, grand total, signatures): ~290px.
+  // Each agent row takes ~20px in print.
+  const estimatedHeight = 290 + (agentCount * 20)
+  const printableBudget = 960
+
+  if (estimatedHeight <= printableBudget) {
+    return 100
+  }
+
+  // Exact scale to strictly fit everything onto 1 sheet of bond paper:
+  const exactScale = Math.floor((printableBudget / estimatedHeight) * 100)
+  return Math.min(100, Math.max(65, exactScale))
+}
+
+function SupervisorStatementTable({
+  group,
+  selectedDate,
+  branchName = configuredBranch,
+  isModal = false,
+  fitOnePage = true,
+  fontScale = 100,
+  densityTier = 'density-standard',
+}) {
   const { positive, negative } = splitAgentsByRemittance(group?.agents || [])
   const positiveTotals = calculateMetricsTotals(positive)
   const negativeTotals = calculateMetricsTotals(negative)
@@ -471,23 +704,36 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
     netSales: positiveTotals.netSales + negativeTotals.netSales,
   }
 
+  const effectiveScale = fitOnePage ? (fontScale || 100) : 100
+  const scaleStyle = fitOnePage && effectiveScale !== 100
+    ? {
+        '--statement-scale': (effectiveScale / 100).toFixed(3),
+        zoom: `${effectiveScale}%`,
+      }
+    : {
+        '--statement-scale': '1',
+      }
+
   return (
-    <div className={`statement-sheet ${isModal ? 'statement-sheet-modal' : 'statement-sheet-inline'}`}>
+    <div
+      className={`statement-sheet ${isModal ? 'statement-sheet-modal' : 'statement-sheet-inline'} ${fitOnePage ? 'a4-single-page-fit' : ''} ${densityTier}`}
+      style={scaleStyle}
+    >
       <div className="statement-header-block">
         <h3 className="statement-company-title">LUCKY BETPLAY CORPORATION</h3>
         <div className="statement-branch-tag">
-          <span>BRANCH:</span> <strong>{branchName.toUpperCase()}</strong>
+          <span>BRANCH:</span> <strong>{(branchName || 'Mandaue').toUpperCase()}</strong>
         </div>
         <h4 className="statement-report-title">CONDENSED SUPERVISOR AGENT REMITTANCE SUMMARY</h4>
-        <p className="statement-report-subtitle">(Unaudited — Based on Consolidated Overall Draws Performance)</p>
+        <p className="statement-report-subtitle">(Unaudited — Official Draw Performance &amp; Accounting Ledger)</p>
         <div className="statement-meta-row">
           <span className="statement-meta-pill"><strong>BRANCH:</strong> {branchName}</span>
           <span className="statement-meta-divider">•</span>
-          <span className="statement-meta-pill"><strong>SUPERVISOR:</strong> {group.supervisor}</span>
+          <span className="statement-meta-pill"><strong>SUPERVISOR:</strong> {group?.supervisor || 'ALL'}</span>
           <span className="statement-meta-divider">•</span>
           <span className="statement-meta-pill"><strong>DATE:</strong> {formatDisplayDate(selectedDate)}</span>
           <span className="statement-meta-divider">•</span>
-          <span className="statement-meta-pill"><strong>TOTAL AGENTS:</strong> {group.agents?.length || 0}</span>
+          <span className="statement-meta-pill"><strong>TOTAL AGENTS:</strong> {group?.agents?.length || 0}</span>
         </div>
       </div>
 
@@ -498,7 +744,7 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
               <th className="statement-th statement-th-agent">AGENT / TELLER</th>
               <th className="statement-th statement-th-num">GROSS</th>
               <th className="statement-th statement-th-num">HITS</th>
-              <th className="statement-th statement-th-num">COMMISSION (10%)</th>
+              <th className="statement-th statement-th-num">COMMISSION</th>
               <th className="statement-th statement-th-num">NET</th>
               <th className="statement-th statement-th-num statement-th-remit">NET SALES / REMITTANCE</th>
             </tr>
@@ -527,7 +773,12 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
                     {formatAmount(agent.gross)}
                   </td>
                   <td className="statement-td statement-num-td">{formatAmount(agent.hits)}</td>
-                  <td className="statement-td statement-num-td">{formatAmount(agent.commission)}</td>
+                  <td className="statement-td statement-num-td">
+                    {formatAmount(agent.commission)}
+                    {agent.commissionRate && (
+                      <small style={{ display: 'block', fontSize: '9px', color: '#64748b' }}>({agent.commissionRate}%)</small>
+                    )}
+                  </td>
                   <td className="statement-td statement-num-td">{formatAmount(agent.net)}</td>
                   <td className="statement-td statement-num-td statement-remit-td">
                     {index === 0 && <span className="accounting-currency-symbol">₱</span>}
@@ -587,7 +838,12 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
                     {formatAmount(agent.gross)}
                   </td>
                   <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.hits)}</td>
-                  <td className="statement-td statement-num-td">{formatAmount(agent.commission)}</td>
+                  <td className="statement-td statement-num-td">
+                    {formatAmount(agent.commission)}
+                    {agent.commissionRate && (
+                      <small style={{ display: 'block', fontSize: '9px', color: '#64748b' }}>({agent.commissionRate}%)</small>
+                    )}
+                  </td>
                   <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.net)}</td>
                   <td className="statement-td statement-num-td statement-remit-td accounting-deficit-text">
                     {index === 0 && <span className="accounting-currency-symbol">₱</span>}
@@ -654,41 +910,219 @@ function SupervisorStatementTable({ group, selectedDate, branchName = configured
         <div className="statement-sig-column">
           <div className="statement-sig-line" />
           <span className="statement-sig-title">SUPERVISOR - {branchName ? branchName.toUpperCase() : 'MANDAUE CITY'}</span>
-          <strong className="statement-sig-name">{group.supervisor}</strong>
+          <strong className="statement-sig-name">{group?.supervisor || 'BRANCH SUPERVISOR'}</strong>
+          <span className="statement-sig-date">Date Signed: _____________________</span>
         </div>
         <div className="statement-sig-column">
           <div className="statement-sig-line" />
           <span className="statement-sig-title">CASHIER / RECEIVER</span>
-          <span className="statement-sig-name">Cashier / Receiver ({branchName})</span>
+          <strong className="statement-sig-name">Authorized Cashier ({branchName})</strong>
+          <span className="statement-sig-date">Date Received: _____________________</span>
+        </div>
+      </div>
+      <div className="statement-print-footer-tag">
+        LUCKY BETPLAY CORPORATION • OFFICIAL REMITTANCE STATEMENT • A4 RECORD • {formatDisplayDate(selectedDate)}
+      </div>
+    </div>
+  )
+}
+
+function downloadCsv(filename, rows) {
+  if (!rows || rows.length === 0) return
+  const keys = Object.keys(rows[0])
+  const header = keys.map((k) => `"${String(k).replace(/"/g, '""')}"`).join(',')
+  const lines = rows.map((row) =>
+    keys.map((k) => {
+      const val = row[k] === null || row[k] === undefined ? '' : String(row[k])
+      return `"${val.replace(/"/g, '""')}"`
+    }).join(',')
+  )
+  const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [header, ...lines].join('\r\n')
+  const encodedUri = encodeURI(csvContent)
+  const link = document.createElement('a')
+  link.setAttribute('href', encodedUri)
+  link.setAttribute('download', filename)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+function AccessRestrictedNotice({
+  requiredPermKey,
+  viewName,
+  currentUser,
+  userPermissions = [],
+  onSwitchView,
+}) {
+  const permMeta = PERMISSIONS.find((p) => p.key === requiredPermKey) || {
+    label: requiredPermKey,
+    group: 'Security',
+  }
+
+  return (
+    <div className="access-restricted-container">
+      <div className="access-restricted-card">
+        <div className="restricted-icon-shield">
+          <Icon name="lock" size={32} />
+        </div>
+        <div className="restricted-badge">PERMISSION ENFORCED &bull; ACCESS RESTRICTED</div>
+        <h2>{viewName || 'Workspace'} Access Restricted</h2>
+        <p className="restricted-desc">
+          Your current active account <strong>@{currentUser?.username}</strong> ({currentUser?.roleLabel || currentUser?.role || 'Staff'}) does not currently have the <strong>{permMeta.label}</strong> permission enabled.
+        </p>
+
+        <div className="restricted-perm-box">
+          <div className="perm-box-row">
+            <span className="perm-box-label">Required Capability:</span>
+            <span className="perm-box-value required-highlight">
+              <code>{requiredPermKey}</code> &bull; {permMeta.label}
+            </span>
+          </div>
+          <div className="perm-box-row">
+            <span className="perm-box-label">Active Account Tier:</span>
+            <span className="perm-box-value">
+              {currentUser?.roleBadge || currentUser?.role || 'User'} ({userPermissions.length}/{PERMISSIONS.length} Capabilities Enabled)
+            </span>
+          </div>
+          <div className="perm-box-row">
+            <span className="perm-box-label">Enabled Privileges:</span>
+            <div className="perm-box-pills">
+              {userPermissions.length === 0 ? (
+                <span className="perm-pill none">No permissions enabled for this account</span>
+              ) : (
+                userPermissions.map((k) => {
+                  const p = PERMISSIONS.find((item) => item.key === k)
+                  return (
+                    <span key={k} className="perm-pill active">
+                      ✓ {p?.label || k}
+                    </span>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="restricted-help-text">
+          <Icon name="alert" size={15} />
+          <span>
+            To grant access, toggle <strong>{permMeta.label}</strong> for <strong>@{currentUser?.username}</strong> or the <strong>{currentUser?.role}</strong> role in the <strong>Role Permission Matrix</strong> under Users &amp; RBAC.
+          </span>
+        </div>
+
+        <div className="restricted-actions-bar">
+          {userPermissions.includes('view_overview') && (
+            <button
+              type="button"
+              className="restricted-action-btn primary"
+              onClick={() => onSwitchView('overview')}
+            >
+              <Icon name="overview" size={14} />
+              <span>Go to Overview</span>
+            </button>
+          )}
+          {userPermissions.includes('view_reports') && (
+            <button
+              type="button"
+              className="restricted-action-btn"
+              onClick={() => onSwitchView('reports')}
+            >
+              <Icon name="reports" size={14} />
+              <span>Go to Draw Reports</span>
+            </button>
+          )}
+          {userPermissions.includes('manage_users') && (
+            <button
+              type="button"
+              className="restricted-action-btn"
+              onClick={() => onSwitchView('rbac')}
+            >
+              <Icon name="shieldCheck" size={14} />
+              <span>Open Role Permission Matrix</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-function SupervisorStatementModal({ group, selectedDate, allSupervisors = [], branchName = configuredBranch, onClose, onSelectSupervisor }) {
+function SupervisorStatementModal({
+  group,
+  selectedDate,
+  allSupervisors = [],
+  branchName = configuredBranch,
+  onClose,
+  onSelectSupervisor,
+  canPrint = true,
+  currentUser = null,
+}) {
+  const [fitOnePage, setFitOnePage] = useState(true)
+  const agentCount = group?.agents?.length || 0
+  const recommendedScale = useMemo(() => calculateAutoFitScale(agentCount), [agentCount])
+  const [isAutoFit, setIsAutoFit] = useState(true)
+  const [manualScale, setManualScale] = useState(recommendedScale)
+
   useEffect(() => {
+    if (isAutoFit) {
+      setManualScale(recommendedScale)
+    }
+  }, [recommendedScale, isAutoFit])
+
+  const currentScale = fitOnePage ? (isAutoFit ? recommendedScale : manualScale) : 100
+
+  const densityTier = useMemo(() => {
+    if (currentScale <= 52) return 'density-micro'
+    if (currentScale <= 68) return 'density-ultra'
+    if (currentScale <= 84) return 'density-compact'
+    return 'density-standard'
+  }, [currentScale])
+
+  const isSafeOnePage = currentScale <= (recommendedScale + 4)
+
+  useEffect(() => {
+    document.body.classList.add('statement-modal-active')
     function handleKeyDown(e) {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.classList.remove('statement-modal-active')
+      window.removeEventListener('keydown', handleKeyDown)
+    }
   }, [onClose])
 
-  const consolidatedOption = {
-    supervisor: 'ALL SUPERVISORS (CONSOLIDATED)',
-    agents: allSupervisors.flatMap((s) => s.agents.map((a) => ({
+  const consolidatedOption = useMemo(() => {
+    const agents = allSupervisors.flatMap((s) => s.agents.map((a) => ({
       ...a,
       teller: `${a.teller} (${s.supervisor})`,
-    }))),
+    })))
+    const totalSalary = allSupervisors.reduce((sum, s) => sum + (s.totalSalary !== undefined ? s.totalSalary : 0), 0)
+    const totalGross = allSupervisors.reduce((sum, s) => sum + s.totalGross, 0)
+    const totalHits = allSupervisors.reduce((sum, s) => sum + s.totalHits, 0)
+    return {
+      supervisor: 'ALL SUPERVISORS (CONSOLIDATED)',
+      agents,
+      totalSalary,
+      totalGross,
+      totalHits,
+    }
+  }, [allSupervisors])
+
+  const handlePrint = () => {
+    window.print()
   }
 
-  return (
+  const modalNode = (
     <div className="statement-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
       <div className="statement-modal-shell" onClick={(e) => e.stopPropagation()}>
         <div className="statement-modal-controls-bar no-print">
           <div className="statement-controls-left">
-            <span className="statement-controls-title">Supervisor Remittance Statement</span>
+            <span className="statement-controls-title">Official Remittance Statement</span>
+            <span className="statement-a4-badge" title="Standard A4 Bond Paper (210 x 297mm)">
+              <Icon name="fileText" size={12} />
+              <span>A4 Bond Paper</span>
+            </span>
             {allSupervisors.length > 1 && (
               <div className="statement-dropdown-wrap">
                 <Icon name="user" size={13} />
@@ -717,14 +1151,104 @@ function SupervisorStatementModal({ group, selectedDate, allSupervisors = [], br
             )}
           </div>
           <div className="statement-controls-right">
+            <label
+              className="statement-fit-toggle"
+              title="Automatically scales fonts, line spacing, and padding to guarantee the entire statement fits strictly on 1 A4 bond paper"
+            >
+              <span className="statement-fit-toggle-label">Auto-Fit 1-Page</span>
+              <span className="ios-toggle-mini">
+                <input
+                  type="checkbox"
+                  checked={fitOnePage && isAutoFit}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setFitOnePage(checked)
+                    setIsAutoFit(checked)
+                    if (checked) {
+                      setManualScale(recommendedScale)
+                    }
+                  }}
+                />
+                <span className="ios-toggle-mini-track" />
+              </span>
+            </label>
+
+            {/* Font Size & Density Stepper Controls */}
+            <div className="statement-scale-stepper-wrap" title="Adjust font size and layout scale (Guaranteed 1-Page fit)">
+              <button
+                type="button"
+                className="statement-scale-step-btn"
+                onClick={() => {
+                  setFitOnePage(true)
+                  setIsAutoFit(false)
+                  setManualScale((prev) => Math.max(55, prev - 5))
+                }}
+                disabled={currentScale <= 55}
+                title="Decrease font size & density (A-)"
+              >
+                <span className="scale-step-label">A-</span>
+              </button>
+
+              <div className="statement-scale-dropdown-wrap">
+                <select
+                  value={isAutoFit ? 'auto' : currentScale}
+                  onChange={(e) => {
+                    setFitOnePage(true)
+                    if (e.target.value === 'auto') {
+                      setIsAutoFit(true)
+                      setManualScale(recommendedScale)
+                    } else {
+                      setIsAutoFit(false)
+                      setManualScale(Number(e.target.value))
+                    }
+                  }}
+                  className="statement-scale-select"
+                  title="Choose density preset or custom scale"
+                >
+                  <option value="auto">Auto-Fit (Optimal {recommendedScale}%)</option>
+                  <option value="100">100% (Standard - Full Page)</option>
+                  <option value="95">95% (Comfortable)</option>
+                  <option value="90">90% (Balanced)</option>
+                  <option value="85">85% (Compact)</option>
+                  <option value="80">80% (Dense)</option>
+                  <option value="75">75% (Ultra-Dense)</option>
+                  <option value="70">70% (High Volume)</option>
+                  <option value="65">65% (Micro)</option>
+                  {!['auto', '100', '95', '90', '85', '80', '75', '70', '65'].includes(String(currentScale)) && (
+                    <option value={currentScale}>{currentScale}% (Custom)</option>
+                  )}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                className="statement-scale-step-btn"
+                onClick={() => {
+                  setFitOnePage(true)
+                  setIsAutoFit(false)
+                  setManualScale((prev) => Math.min(120, prev + 5))
+                }}
+                disabled={currentScale >= 120}
+                title="Increase font size & density (A+)"
+              >
+                <span className="scale-step-label">A+</span>
+              </button>
+            </div>
+
             <button
               type="button"
-              className="statement-action-btn statement-print-trigger-btn"
-              onClick={() => window.print()}
-              title="Print official document (A4 / Letter)"
+              className={`statement-action-btn statement-print-trigger-btn ${!canPrint ? 'is-perm-locked' : ''}`}
+              onClick={() => {
+                if (!canPrint) {
+                  alert(`Access Restricted: Printing statements is locked for @${currentUser?.username || 'your account'} in the Role Matrix.`)
+                  return
+                }
+                handlePrint()
+              }}
+              title={canPrint ? "Print official document on 1 A4 Bond Paper (or Save as PDF)" : "Printing statements is locked for your account in the Role Matrix"}
             >
-              <Icon name="print" size={14} />
-              <span>Print Statement</span>
+              <Icon name={canPrint ? "print" : "lock"} size={14} />
+              <span>{canPrint ? "Print Statement" : "Print Locked"}</span>
             </button>
             <button
               type="button"
@@ -739,11 +1263,60 @@ function SupervisorStatementModal({ group, selectedDate, allSupervisors = [], br
         </div>
 
         <div className="statement-modal-content-area">
-          <SupervisorStatementTable group={group} selectedDate={selectedDate} branchName={branchName} isModal={true} />
+          <div className="statement-preview-header-tag no-print">
+            <div className="statement-preview-meta-info">
+              <span className="statement-preview-page-pill">
+                <Icon name="fileText" size={12} />
+                A4 Bond Paper Preview (210 × 297 mm)
+              </span>
+              <span className="statement-preview-scale-pill">
+                Scale: <strong>{currentScale}%</strong>
+              </span>
+              <span className="statement-preview-agent-pill">
+                {agentCount} Agents Total
+              </span>
+            </div>
+            <div className="statement-preview-status-indicator">
+              {isSafeOnePage ? (
+                <span className="statement-fit-badge fit-safe" title="Guaranteed to fit completely within 1 single A4 bond paper">
+                  <Icon name="check" size={12} />
+                  <span>1-Page A4 Guaranteed</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="statement-fit-badge fit-warn-btn"
+                  onClick={() => {
+                    setFitOnePage(true)
+                    setIsAutoFit(true)
+                    setManualScale(recommendedScale)
+                  }}
+                  title="Scale is large and may spill onto Page 2. Click to Auto-Fit onto 1 Page."
+                >
+                  <Icon name="alert" size={12} />
+                  <span>May Spill Over • Click to Auto-Fit</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="statement-a4-page-frame">
+            <SupervisorStatementTable
+              group={group}
+              selectedDate={selectedDate}
+              branchName={branchName}
+              isModal={true}
+              fitOnePage={fitOnePage}
+              fontScale={currentScale}
+              densityTier={densityTier}
+            />
+          </div>
         </div>
       </div>
     </div>
   )
+
+  return createPortal(modalNode, document.body)
 }
 
 
@@ -759,6 +1332,10 @@ function OverviewDashboard({
   rawColumns = [],
   endpointLabel,
   onRefresh,
+  canPrint = true,
+  canExport = true,
+  canRawFeed = true,
+  currentUser = null,
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [showRawFeed, setShowRawFeed] = useState(false)
@@ -776,7 +1353,7 @@ function OverviewDashboard({
     ? overallDraws.reduce((sum, d) => sum + (Number(d.TotalOveAllKabig ?? d.TotalOverAllKabig) || 0), 0)
     : (totalGross - totalHits)
 
-  const totalCommission = totalGross * 0.1
+  const totalCommission = supervisorReports.reduce((sum, s) => sum + (s.totalSalary !== undefined ? s.totalSalary : (s.totalGross * 0.1)), 0)
   const netRemittance = totalGross - totalHits - totalCommission
   const payoutRate = totalGross > 0 ? ((totalHits / totalGross) * 100) : 0
   const retentionRate = totalGross > 0 ? ((totalKabig / totalGross) * 100) : 0
@@ -784,10 +1361,12 @@ function OverviewDashboard({
   const allAgents = useMemo(() => {
     return supervisorReports.flatMap((s) =>
       s.agents.map((a) => {
-        const netSales = a.totalNet - (a.totalGross * 0.1)
+        const comm = a.totalSalary !== undefined ? a.totalSalary : (a.totalGross * ((a.commissionRate || 10) / 100))
+        const netSales = a.totalNet - comm
         return {
           ...a,
           supervisor: s.supervisor,
+          commission: comm,
           netSales,
           isDeficit: netSales < 0,
         }
@@ -800,10 +1379,16 @@ function OverviewDashboard({
 
   const filteredSupervisors = useMemo(() => {
     const list = supervisorReports.map((s) => {
-      const solventCount = s.agents.filter((a) => (a.totalNet - a.totalGross * 0.1) >= 0).length
-      const deficitCount = s.agents.filter((a) => (a.totalNet - a.totalGross * 0.1) < 0).length
-      const commission = s.totalGross * 0.1
+      const commission = s.totalSalary !== undefined ? s.totalSalary : s.agents.reduce((sum, a) => sum + (a.totalSalary !== undefined ? a.totalSalary : a.totalGross * 0.1), 0)
       const netRemittance = s.totalNet - commission
+      const solventCount = s.agents.filter((a) => {
+        const comm = a.totalSalary !== undefined ? a.totalSalary : (a.totalGross * ((a.commissionRate || 10) / 100))
+        return (a.totalNet - comm) >= 0
+      }).length
+      const deficitCount = s.agents.filter((a) => {
+        const comm = a.totalSalary !== undefined ? a.totalSalary : (a.totalGross * ((a.commissionRate || 10) / 100))
+        return (a.totalNet - comm) < 0
+      }).length
       const payoutRate = s.totalGross > 0 ? ((s.totalHits / s.totalGross) * 100).toFixed(1) : '0.0'
       return {
         ...s,
@@ -1113,6 +1698,32 @@ function OverviewDashboard({
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
+              <button
+                type="button"
+                className={`export-data-btn ${!canExport ? 'is-perm-locked' : ''}`}
+                onClick={() => {
+                  if (!canExport) {
+                    alert(`Access Restricted: Your account (@${currentUser?.username || 'user'}) does not have 'export_data' permission in the Role Matrix.`)
+                    return
+                  }
+                  const exportData = filteredSupervisors.map((s, idx) => ({
+                    Rank: idx + 1,
+                    Supervisor: s.supervisor,
+                    SolventAgents: s.solventCount,
+                    DeficitAgents: s.deficitCount,
+                    TotalGross: s.totalGross,
+                    TotalHits: s.totalHits,
+                    Commission: s.commission,
+                    NetRemittance: s.netRemittance,
+                    Status: s.netRemittance >= 0 ? 'Solvent' : 'Deficit',
+                  }))
+                  downloadCsv(`LuckyBet_Supervisor_Leaderboard_${selectedDate}.csv`, exportData)
+                }}
+                title={canExport ? "Export Supervisor Leaderboard to CSV" : "Export data permission ('export_data') is locked for your account in the Role Matrix"}
+              >
+                <Icon name={canExport ? "download" : "lock"} size={13} />
+                <span>{canExport ? "Export CSV" : "Export Locked"}</span>
+              </button>
               <span className="record-count">{filteredSupervisors.length} Supervisors</span>
             </div>
           </div>
@@ -1163,12 +1774,18 @@ function OverviewDashboard({
                       <td>
                         <button
                           type="button"
-                          className="overview-statement-btn"
-                          onClick={() => onViewStatement(spvr)}
-                          title={`View official remittance statement for ${spvr.supervisor}`}
+                          className={`overview-statement-btn ${!canPrint ? 'is-perm-locked' : ''}`}
+                          onClick={() => {
+                            if (!canPrint) {
+                              alert(`Access Restricted: Printing statements is locked for @${currentUser?.username || 'user'} in the Role Matrix.`)
+                              return
+                            }
+                            onViewStatement(spvr)
+                          }}
+                          title={canPrint ? `Print official remittance statement for ${spvr.supervisor} (A4)` : "Printing statements is locked for your account in the Role Matrix"}
                         >
-                          <Icon name="fileText" size={12} />
-                          <span>View Statement</span>
+                          <Icon name={canPrint ? "print" : "lock"} size={12} />
+                          <span>{canPrint ? "Print Statement" : "Print Locked"}</span>
                         </button>
                       </td>
                     </tr>
@@ -1183,10 +1800,10 @@ function OverviewDashboard({
                   <td>
                     <div className="spvr-agent-pills">
                       <span className="spvr-pill-solvent">
-                        {supervisorReports.reduce((s, g) => s + g.agents.filter(a => (a.totalNet - a.totalGross * 0.1) >= 0).length, 0)} Solvent
+                        {supervisorReports.reduce((s, g) => s + g.agents.filter(a => (a.totalNet - (a.totalSalary !== undefined ? a.totalSalary : a.totalGross * 0.1)) >= 0).length, 0)} Solvent
                       </span>
                       <span className="spvr-pill-deficit">
-                        {supervisorReports.reduce((s, g) => s + g.agents.filter(a => (a.totalNet - a.totalGross * 0.1) < 0).length, 0)} Deficit
+                        {supervisorReports.reduce((s, g) => s + g.agents.filter(a => (a.totalNet - (a.totalSalary !== undefined ? a.totalSalary : a.totalGross * 0.1)) < 0).length, 0)} Deficit
                       </span>
                     </div>
                   </td>
@@ -1197,10 +1814,10 @@ function OverviewDashboard({
                     ₱ {formatAmount(supervisorReports.reduce((s, g) => s + g.totalHits, 0))}
                   </td>
                   <td className="num-col">
-                    ₱ {formatAmount(supervisorReports.reduce((s, g) => s + (g.totalGross * 0.1), 0))}
+                    ₱ {formatAmount(supervisorReports.reduce((s, g) => s + (g.totalSalary !== undefined ? g.totalSalary : g.totalGross * 0.1), 0))}
                   </td>
                   <td className="num-col">
-                    ₱ {formatAmount(supervisorReports.reduce((s, g) => s + (g.totalNet - (g.totalGross * 0.1)), 0))}
+                    ₱ {formatAmount(supervisorReports.reduce((s, g) => s + (g.totalNet - (g.totalSalary !== undefined ? g.totalSalary : g.totalGross * 0.1)), 0))}
                   </td>
                   <td><strong>{supervisorReports.length} Statements</strong></td>
                 </tr>
@@ -1287,45 +1904,47 @@ function OverviewDashboard({
         </div>
       )}
 
-      <div className="raw-feed-accordion">
-        <button
-          type="button"
-          className="raw-feed-toggle-btn"
-          onClick={() => setShowRawFeed(!showRawFeed)}
-        >
-          <span>Source API Technical Feed ({rawRows.length} raw records from {endpointLabel})</span>
-          <Icon name={showRawFeed ? 'chevronUp' : 'chevronDown'} size={14} />
-        </button>
-        {showRawFeed && (
-          <div style={{ padding: '14px', borderTop: '1px solid #e2e8f0' }}>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    {rawColumns.map((col) => (
-                      <th key={col}>{col.replaceAll('_', ' ')}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rawRows.slice(0, 50).map((row, rIdx) => (
-                    <tr key={row.id ?? rIdx}>
+      {canRawFeed && (
+        <div className="raw-feed-accordion">
+          <button
+            type="button"
+            className="raw-feed-toggle-btn"
+            onClick={() => setShowRawFeed(!showRawFeed)}
+          >
+            <span>Source API Technical Feed ({rawRows.length} raw records from {endpointLabel})</span>
+            <Icon name={showRawFeed ? 'chevronUp' : 'chevronDown'} size={14} />
+          </button>
+          {showRawFeed && (
+            <div style={{ padding: '14px', borderTop: '1px solid #e2e8f0' }}>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
                       {rawColumns.map((col) => (
-                        <td key={col}>{formatReportValue(row?.[col], col)}</td>
+                        <th key={col}>{col.replaceAll('_', ' ')}</th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              {rawRows.length > 50 && (
-                <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
-                  Showing first 50 of {rawRows.length} records.
-                </p>
-              )}
+                  </thead>
+                  <tbody>
+                    {rawRows.slice(0, 50).map((row, rIdx) => (
+                      <tr key={row.id ?? rIdx}>
+                        {rawColumns.map((col) => (
+                          <td key={col}>{formatReportValue(row?.[col], col)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {rawRows.length > 50 && (
+                  <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
+                    Showing first 50 of {rawRows.length} records.
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -1351,6 +1970,121 @@ function App() {
       return null
     }
   })
+  const [rbacRoles, setRbacRoles] = useState(() => getRbacRoles())
+  const [rbacRev, setRbacRev] = useState(0)
+  const [commissionSettings, setCommissionSettings] = useState(() => loadCommissionSettings())
+
+  useEffect(() => {
+    const handleCommissionChange = (e) => {
+      if (e?.detail) setCommissionSettings(e.detail)
+      else setCommissionSettings(loadCommissionSettings())
+    }
+    window.addEventListener('luckybet_commissions_updated', handleCommissionChange)
+    return () => window.removeEventListener('luckybet_commissions_updated', handleCommissionChange)
+  }, [])
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('luckybet_theme')
+      if (saved) return saved === 'dark'
+      return window.matchMedia('(prefers-color-scheme: dark)').matches
+    } catch {
+      return false
+    }
+  })
+
+  useEffect(() => {
+    const themeVal = isDarkMode ? 'dark' : 'light'
+    document.documentElement.setAttribute('data-theme', themeVal)
+    document.body.setAttribute('data-theme', themeVal)
+    localStorage.setItem('luckybet_theme', themeVal)
+  }, [isDarkMode])
+
+  const handleSwitchUser = (targetUser) => {
+    const rDef = rbacRoles[targetUser.role] || DEFAULT_ROLES[targetUser.role] || DEFAULT_ROLES.staff
+    const perms = getUserEffectivePermissions(targetUser, rbacRoles)
+    const isTargetAdmin = targetUser.role === 'admin'
+    const newUser = {
+      username: targetUser.username,
+      name: targetUser.name,
+      role: targetUser.role,
+      roleLabel: rDef.label,
+      roleBadge: rDef.badge,
+      branch: targetUser.branch,
+      avatar: targetUser.avatar || targetUser.name.substring(0, 2).toUpperCase(),
+      token: 'rbac-token-' + targetUser.id,
+      loginTime: new Date().toISOString(),
+      permissions: perms,
+      simulatedFromAdmin: !isTargetAdmin,
+    }
+    setCurrentUser(newUser)
+    localStorage.setItem('luckybet_user', JSON.stringify(newUser))
+  }
+
+  const handleReturnToAdmin = () => {
+    const adminUser = getRbacUsers().find((u) => u.role === 'admin') || DEFAULT_USERS[0]
+    const rDef = rbacRoles[adminUser.role] || DEFAULT_ROLES.admin
+    const perms = getUserEffectivePermissions(adminUser, rbacRoles)
+    const restored = {
+      username: adminUser.username,
+      name: adminUser.name,
+      role: adminUser.role,
+      roleLabel: rDef.label,
+      roleBadge: rDef.badge,
+      branch: adminUser.branch,
+      avatar: adminUser.avatar || 'JL',
+      token: 'rbac-token-' + adminUser.id,
+      loginTime: new Date().toISOString(),
+      permissions: perms,
+      simulatedFromAdmin: false,
+    }
+    setCurrentUser(restored)
+    localStorage.setItem('luckybet_user', JSON.stringify(restored))
+  }
+
+  // Listen for real-time RBAC updates (both role-tier toggles and account-specific custom overrides)
+  useEffect(() => {
+    const handleRbacChange = () => {
+      setRbacRoles(getRbacRoles())
+      setRbacRev((r) => r + 1)
+    }
+    window.addEventListener('luckybet_rbac_change', handleRbacChange)
+    return () => window.removeEventListener('luckybet_rbac_change', handleRbacChange)
+  }, [])
+
+  // Calculate dynamic effective capabilities for currentUser depending on account and matrix toggles
+  const userPermissions = useMemo(() => {
+    if (!currentUser) return []
+    return getUserEffectivePermissions(currentUser, rbacRoles)
+  }, [currentUser, rbacRoles, rbacRev])
+
+  const can = useCallback(
+    (permKey) => {
+      return hasPermission(currentUser, permKey, rbacRoles)
+    },
+    [currentUser, rbacRoles, rbacRev]
+  )
+
+  // Automatically snap to first permitted tab if activeView is not permitted
+  useEffect(() => {
+    if (!currentUser) return
+    const isAllowed = (view) => {
+      if (view === 'overview') return can('view_overview')
+      if (view === 'reports') return can('view_reports')
+      if (view === 'commissions') return can('manage_commissions')
+      if (view === 'rbac') return can('manage_users')
+      if (view === 'activity') return can('audit_logs')
+      return false
+    }
+
+    if (!isAllowed(activeView)) {
+      if (can('view_overview')) setActiveView('overview')
+      else if (can('view_reports')) setActiveView('reports')
+      else if (can('manage_commissions')) setActiveView('commissions')
+      else if (can('manage_users')) setActiveView('rbac')
+      else if (can('audit_logs')) setActiveView('activity')
+    }
+  }, [activeView, can, currentUser])
 
   const handleLogout = () => {
     signOutFromSupabase().catch(() => {})
@@ -1389,7 +2123,7 @@ function App() {
             dynamicDrawIds = overallData.map((d) => d?.id).filter(Boolean)
           }
         } catch (fetchDrawsError) {
-          console.warn('Hindi makuha ang dynamic draw IDs mula sa overallApiUrl:', fetchDrawsError)
+          console.warn('Unable to fetch dynamic draw IDs from overallApiUrl:', fetchDrawsError)
         }
       }
 
@@ -1409,7 +2143,7 @@ function App() {
             requestUrl.searchParams.set('from', queryDate)
             requestUrl.searchParams.set('to', getNextDate(queryDate))
             const response = await fetch(requestUrl, { headers })
-            if (!response.ok) throw new Error(`Hindi ma-load ang draw ${drawId} (${response.status})`)
+            if (!response.ok) throw new Error(`Unable to load draw ${drawId} (${response.status})`)
             return normalizeRows(await response.json())
           })),
           supervisorApiUrl
@@ -1418,7 +2152,7 @@ function App() {
                 requestUrl.searchParams.set('from', queryDate)
                 requestUrl.searchParams.set('to', getNextDate(queryDate))
                 const response = await fetch(requestUrl, { headers })
-                if (!response.ok) throw new Error(`Hindi ma-load ang supervisor names (${response.status})`)
+                if (!response.ok) throw new Error(`Unable to load supervisor names (${response.status})`)
                 return normalizeRows(await response.json())
               })()
             : Promise.resolve([])
@@ -1436,7 +2170,7 @@ function App() {
           requestUrl.searchParams.set('from', queryDate)
           requestUrl.searchParams.set('to', getNextDate(queryDate))
           const response = await fetch(requestUrl, { headers })
-          if (!response.ok) throw new Error(`Hindi ma-load ang report (${response.status})`)
+          if (!response.ok) throw new Error(`Unable to load report (${response.status})`)
           reportRows = normalizeRows(await response.json())
         }
         setSupervisorRows([])
@@ -1445,7 +2179,7 @@ function App() {
       setRows(reportRows)
       setLastUpdated(new Date())
     } catch (requestError) {
-      setError(requestError.message || 'May problema sa pagkuha ng report.')
+      setError(requestError.message || 'Error retrieving report data.')
       setRows([])
       setSupervisorRows([])
       setOverallDraws([])
@@ -1472,7 +2206,7 @@ function App() {
 
   const columns = getColumns(rows)
   const drawRows = rows.filter((row) => row && row.drawTime !== undefined)
-  const supervisorReports = getSupervisorReports(drawRows, supervisorRows)
+  const supervisorReports = getSupervisorReports(drawRows, supervisorRows, commissionSettings)
 
   const activeSupervisor = (selectedSupervisor !== 'all' && supervisorReports.some((group) => group.supervisor === selectedSupervisor))
     ? selectedSupervisor
@@ -1491,6 +2225,8 @@ function App() {
     return <LoginPage onLoginSuccess={(user) => setCurrentUser(user)} branchName={branchName} />
   }
 
+  const canSwitchAccounts = currentUser?.role === 'admin' || Boolean(currentUser?.simulatedFromAdmin)
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -1502,12 +2238,67 @@ function App() {
           </span>
         </div>
         <nav className="sidebar-nav" aria-label="Main navigation">
-          <p className="nav-label">Workspace</p>
-          <button className={`nav-item ${activeView === 'overview' ? 'active' : ''}`} type="button" onClick={() => setActiveView('overview')}><span className="nav-icon"><Icon name="overview" /></span> Overview</button>
-          <button className={`nav-item ${activeView === 'reports' ? 'active' : ''}`} type="button" onClick={() => setActiveView('reports')}><span className="nav-icon"><Icon name="reports" /></span> Reports</button>
-          <p className="nav-label" style={{ marginTop: '16px' }}>Access Control</p>
-          <button className={`nav-item ${activeView === 'rbac' ? 'active' : ''}`} type="button" onClick={() => setActiveView('rbac')}><span className="nav-icon"><Icon name="shieldCheck" /></span> Users &amp; RBAC</button>
-          <button className={`nav-item ${activeView === 'activity' ? 'active' : ''}`} type="button" onClick={() => setActiveView('activity')}><span className="nav-icon"><Icon name="activity" /></span> Activity Log</button>
+          {(can('view_overview') || can('view_reports') || can('manage_commissions')) && (
+            <>
+              <p className="nav-label">Workspace</p>
+              {can('view_overview') && (
+                <button
+                  className={`nav-item ${activeView === 'overview' ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setActiveView('overview')}
+                >
+                  <span className="nav-icon"><Icon name="overview" /></span>
+                  <span>Overview</span>
+                </button>
+              )}
+              {can('view_reports') && (
+                <button
+                  className={`nav-item ${activeView === 'reports' ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setActiveView('reports')}
+                >
+                  <span className="nav-icon"><Icon name="reports" /></span>
+                  <span>Reports</span>
+                </button>
+              )}
+              {can('manage_commissions') && (
+                <button
+                  className={`nav-item ${activeView === 'commissions' ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setActiveView('commissions')}
+                >
+                  <span className="nav-icon"><Icon name="percent" /></span>
+                  <span>Commissions</span>
+                </button>
+              )}
+            </>
+          )}
+
+          {(can('manage_users') || can('audit_logs')) && (
+            <>
+              <p className="nav-label" style={{ marginTop: (can('view_overview') || can('view_reports')) ? '16px' : '0' }}>Access Control</p>
+              {can('manage_users') && (
+                <button
+                  className={`nav-item ${activeView === 'rbac' ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setActiveView('rbac')}
+                >
+                  <span className="nav-icon"><Icon name="shieldCheck" /></span>
+                  <span>Users &amp; RBAC</span>
+                </button>
+              )}
+              {can('audit_logs') && (
+                <button
+                  className={`nav-item ${activeView === 'activity' ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setActiveView('activity')}
+                >
+                  <span className="nav-icon"><Icon name="activity" /></span>
+                  <span>Activity Log</span>
+                </button>
+              )}
+            </>
+          )}
         </nav>
         <div className="sidebar-footer">
           <div className="status-dot" />
@@ -1527,6 +2318,8 @@ function App() {
             <h1>
               {activeView === 'reports'
                 ? 'Agent reports'
+                : activeView === 'commissions'
+                ? 'Supervisor Base Rates & Agent Overrides'
                 : activeView === 'rbac'
                 ? 'User Credentials & Access Control (RBAC)'
                 : activeView === 'activity'
@@ -1537,29 +2330,25 @@ function App() {
           <div className="topbar-actions">
             <span className="date-label">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Connecting...'}</span>
             <button className="refresh-button" type="button" onClick={() => loadReport(selectedDate)} disabled={loading}><Icon name="refresh" size={15} /> {loading ? 'Loading' : 'Refresh'}</button>
-            <div className="user-profile-widget">
-              <div className="avatar" aria-label="User profile">
-                {currentUser?.username ? currentUser.username.substring(0, 2).toUpperCase() : 'AC'}
-              </div>
-              <div className="user-info-text">
-                <span className="user-display-name">{currentUser?.name || 'Accountant'}</span>
-                <span className="user-display-role">{currentUser?.role || 'Accounting'}</span>
-              </div>
-              <button
-                type="button"
-                className="logout-trigger-btn"
-                onClick={handleLogout}
-                title="Sign out of Lucky Betplay"
-              >
-                <Icon name="logOut" size={13} />
-                <span>Logout</span>
-              </button>
-            </div>
+            <FacebookProfileDropdown
+              currentUser={currentUser}
+              allUsers={getRbacUsers()}
+              userPermissions={userPermissions}
+              totalPermissionsCount={PERMISSIONS.length}
+              isDarkMode={isDarkMode}
+              onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
+              onSwitchUser={handleSwitchUser}
+              onReturnToAdmin={handleReturnToAdmin}
+              onLogout={handleLogout}
+              onNavigateView={setActiveView}
+              canSwitchAccounts={canSwitchAccounts}
+              can={can}
+            />
           </div>
         </header>
 
         <section className="content-area">
-          {(activeView === 'overview' || activeView === 'reports') && (
+          {((activeView === 'overview' && can('view_overview')) || (activeView === 'reports' && can('view_reports'))) && (
             <>
               <div className="welcome-row">
                 <div>
@@ -1659,167 +2448,246 @@ function App() {
           )}
 
           {activeView === 'overview' && (
-            <OverviewDashboard
-              overallDraws={overallDraws}
-              supervisorReports={supervisorReports}
-              selectedDate={selectedDate}
-              branchName={branchName}
-              loading={loading}
-              error={error}
-              onViewStatement={(group) => setStatementModalGroup(group)}
-              rawRows={rows}
-              rawColumns={columns}
-              endpointLabel={endpointLabel}
-              onRefresh={() => loadReport(selectedDate)}
-            />
+            !can('view_overview') ? (
+              <AccessRestrictedNotice
+                requiredPermKey="view_overview"
+                viewName="Overview Dashboard & KPIs"
+                currentUser={currentUser}
+                userPermissions={userPermissions}
+                onSwitchView={setActiveView}
+              />
+            ) : (
+              <OverviewDashboard
+                overallDraws={overallDraws}
+                supervisorReports={supervisorReports}
+                selectedDate={selectedDate}
+                branchName={branchName}
+                loading={loading}
+                error={error}
+                onViewStatement={(group) => setStatementModalGroup(group)}
+                rawRows={rows}
+                rawColumns={columns}
+                endpointLabel={endpointLabel}
+                onRefresh={() => loadReport(selectedDate)}
+                canPrint={can('print_statements')}
+                canExport={can('export_data')}
+                canRawFeed={can('view_raw_feed')}
+                currentUser={currentUser}
+              />
+            )
           )}
 
-          {activeView === 'reports' && !loading && !error && supervisorReports.length > 0 && <DrawGrossSummary supervisorReports={supervisorReports} />}
+          {activeView === 'reports' && (
+            !can('view_reports') ? (
+              <AccessRestrictedNotice
+                requiredPermKey="view_reports"
+                viewName="Draw Gross & Turnover Reports"
+                currentUser={currentUser}
+                userPermissions={userPermissions}
+                onSwitchView={setActiveView}
+              />
+            ) : (
+              <>
+                {!loading && !error && supervisorReports.length > 0 && <DrawGrossSummary supervisorReports={supervisorReports} />}
 
-          {activeView === 'reports' && !loading && !error && <section className="report-panel gross-panel supervisor-report">
-            <div className="panel-heading supervisor-panel-heading">
-              <div className="panel-heading-title">
-                <h2>Gross per supervisor</h2>
-                <p className="source-label">Teller performance for {formatDisplayDate(selectedDate)}</p>
-              </div>
-              <div className="supervisor-filter-bar">
-                <div className="supervisor-filter-pills">
-                  <button
-                    type="button"
-                    className={`filter-pill-btn ${activeSupervisor === 'all' ? 'active' : ''}`}
-                    onClick={() => setSelectedSupervisor('all')}
-                    title="Show all supervisors"
-                  >
-                    <Icon name="users" size={13} />
-                    <span>All Supervisors</span>
-                    <span className="filter-count-badge">{supervisorReports.length}</span>
-                  </button>
-                </div>
+                {!loading && !error && <section className="report-panel gross-panel supervisor-report">
+                  <div className="panel-heading supervisor-panel-heading">
+                    <div className="panel-heading-title">
+                      <h2>Gross per supervisor</h2>
+                      <p className="source-label">Teller performance for {formatDisplayDate(selectedDate)}</p>
+                    </div>
+                    <div className="supervisor-filter-bar">
+                      <div className="supervisor-filter-pills">
+                        <button
+                          type="button"
+                          className={`filter-pill-btn ${activeSupervisor === 'all' ? 'active' : ''}`}
+                          onClick={() => setSelectedSupervisor('all')}
+                          title="Show all supervisors"
+                        >
+                          <Icon name="users" size={13} />
+                          <span>All Supervisors</span>
+                          <span className="filter-count-badge">{supervisorReports.length}</span>
+                        </button>
+                      </div>
 
-                <div className="supervisor-select-group">
-                  <Icon name="user" size={14} />
-                  <select
-                    id="supervisor-filter-dropdown"
-                    className="supervisor-filter-select"
-                    value={activeSupervisor}
-                    onChange={(event) => setSelectedSupervisor(event.target.value)}
-                    aria-label="Filter supervisor"
-                  >
-                    <option value="all">All Supervisors ({supervisorReports.length})</option>
-                    <optgroup label="Select Specific Supervisor">
-                      {supervisorReports.map((group) => (
-                        <option key={group.supervisor} value={group.supervisor}>
-                          {group.supervisor} ({group.agents.length} {group.agents.length === 1 ? 'agent' : 'agents'})
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </div>
+                      <div className="supervisor-select-group">
+                        <Icon name="user" size={14} />
+                        <select
+                          id="supervisor-filter-dropdown"
+                          className="supervisor-filter-select"
+                          value={activeSupervisor}
+                          onChange={(event) => setSelectedSupervisor(event.target.value)}
+                          aria-label="Filter supervisor"
+                        >
+                          <option value="all">All Supervisors ({supervisorReports.length})</option>
+                          <optgroup label="Select Specific Supervisor">
+                            {supervisorReports.map((group) => (
+                              <option key={group.supervisor} value={group.supervisor}>
+                                {group.supervisor} ({group.agents.length} {group.agents.length === 1 ? 'agent' : 'agents'})
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+                      </div>
 
-                {activeSupervisor !== 'all' && (
-                  <button
-                    type="button"
-                    className="reset-supervisor-filter-btn"
-                    onClick={() => setSelectedSupervisor('all')}
-                    title="Reset to all supervisors"
-                  >
-                    Show All
-                  </button>
-                )}
+                      {activeSupervisor !== 'all' && (
+                        <button
+                          type="button"
+                          className="reset-supervisor-filter-btn"
+                          onClick={() => setSelectedSupervisor('all')}
+                          title="Reset to all supervisors"
+                        >
+                          Show All
+                        </button>
+                      )}
 
-                <div className="overall-toggle-container">
-                  <span className="overall-toggle-divider" />
-                  <label className="overall-toggle-label" htmlFor="toggle-overall-columns" title="Toggle Overall group visibility">
-                    <span className="overall-toggle-text">Show Overall</span>
-                    <span className="toggle-switch-ui">
-                      <input
-                        type="checkbox"
-                        id="toggle-overall-columns"
-                        className="toggle-checkbox"
-                        checked={showOverall}
-                        onChange={(e) => setShowOverall(e.target.checked)}
-                      />
-                      <span className="toggle-track-slider" />
-                    </span>
-                  </label>
-                </div>
+                      <div className="overall-toggle-container">
+                        <span className="overall-toggle-divider" />
+                        <label className="overall-toggle-label" htmlFor="toggle-overall-columns" title="Toggle Overall group visibility">
+                          <span className="overall-toggle-text">Show Overall</span>
+                          <span className="toggle-switch-ui">
+                            <input
+                              type="checkbox"
+                              id="toggle-overall-columns"
+                              className="toggle-checkbox"
+                              checked={showOverall}
+                              onChange={(e) => setShowOverall(e.target.checked)}
+                            />
+                            <span className="toggle-track-slider" />
+                          </span>
+                        </label>
+                      </div>
 
-                <div className="view-mode-toggle-wrap">
-                  <span className="overall-toggle-divider" />
-                  <div className="view-mode-tabs" role="group" aria-label="Table format">
-                    <button
-                      type="button"
-                      className={`view-mode-tab-btn ${reportViewMode === 'matrix' ? 'active' : ''}`}
-                      onClick={() => setReportViewMode('matrix')}
-                      title="Show Draw Matrix (10:30 AM, 2:00 PM, 3:00 PM, 5:00 PM, 7:00 PM, 9:00 PM)"
-                    >
-                      <Icon name="fields" size={12} />
-                      <span>Draw Matrix</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`view-mode-tab-btn ${reportViewMode === 'statement' ? 'active' : ''}`}
-                      onClick={() => setReportViewMode('statement')}
-                      title="Show Balance Sheet Remittance Statement (Positive on top, Negative on bottom)"
-                    >
-                      <Icon name="fileText" size={12} />
-                      <span>Remittance Statement</span>
-                    </button>
+                      <div className="view-mode-toggle-wrap">
+                        <span className="overall-toggle-divider" />
+                        <div className="view-mode-tabs" role="group" aria-label="Table format">
+                          <button
+                            type="button"
+                            className={`view-mode-tab-btn ${reportViewMode === 'matrix' ? 'active' : ''}`}
+                            onClick={() => setReportViewMode('matrix')}
+                            title="Show Draw Matrix (10:30 AM, 2:00 PM, 3:00 PM, 5:00 PM, 7:00 PM, 9:00 PM)"
+                          >
+                            <Icon name="fields" size={12} />
+                            <span>Draw Matrix</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`view-mode-tab-btn ${reportViewMode === 'statement' ? 'active' : ''}`}
+                            onClick={() => setReportViewMode('statement')}
+                            title="Show Balance Sheet Remittance Statement (Positive on top, Negative on bottom)"
+                          >
+                            <Icon name="fileText" size={12} />
+                            <span>Remittance Statement</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {supervisorReports.length > 0 && (
+                        <button
+                          type="button"
+                          className={`supervisor-statement-top-btn ${!can('print_statements') ? 'is-perm-locked' : ''}`}
+                          onClick={() => {
+                            if (!can('print_statements')) {
+                              alert(`Access Restricted: Printing statements is locked for @${currentUser?.username || 'user'} in the Role Matrix.`)
+                              return
+                            }
+                            const target = activeSupervisor !== 'all'
+                              ? (supervisorReports.find((g) => g.supervisor === activeSupervisor) ?? supervisorReports[0])
+                              : {
+                                  supervisor: 'ALL SUPERVISORS (CONSOLIDATED)',
+                                  agents: supervisorReports.flatMap((s) => s.agents.map((a) => ({
+                                    ...a,
+                                    teller: `${a.teller} (${s.supervisor})`,
+                                  }))),
+                                }
+                            if (target) setStatementModalGroup(target)
+                          }}
+                          title={can('print_statements') ? "View and print official balance sheet remittance statement on A4 bond paper" : "Printing statements is locked for your account in the Role Matrix"}
+                        >
+                          <Icon name={can('print_statements') ? "print" : "lock"} size={13} />
+                          <span>{can('print_statements') ? "Print Statement (A4)" : "Print Locked"}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                  {!hasAgentFields || !hasSupervisorFields ? <div className="breakdown-note">The current API response does not include {hasAgentFields ? 'supervisor' : hasSupervisorFields ? 'agent' : 'agent or supervisor'} fields, so the available gross is grouped as unspecified. The endpoint must return those fields for an attributed breakdown.</div> : null}
+                  {drawRows.length === 0 ? <div className="state-message">No agent report records were returned for {formatDisplayDate(selectedDate)}.</div> : <div className="supervisor-groups">{displayedSupervisors.map((group) => <section className="supervisor-group" key={group.supervisor}>
+                    <div className="supervisor-heading">
+                      <div className="supervisor-heading-info">
+                        <strong>{group.supervisor}</strong>
+                        <span>{group.agents.length} agents / {drawGroups.length} draw groups</span>
+                      </div>
+                      <button
+                        type="button"
+                        className={`supervisor-heading-statement-btn ${!can('print_statements') ? 'is-perm-locked' : ''}`}
+                        onClick={() => {
+                          if (!can('print_statements')) {
+                            alert(`Access Restricted: Printing statements is locked for @${currentUser?.username || 'user'} in the Role Matrix.`)
+                            return
+                          }
+                          setStatementModalGroup(group)
+                        }}
+                        title={can('print_statements') ? `Open official financial statement for ${group.supervisor} (A4)` : "Printing statements is locked for this account in the Role Matrix"}
+                      >
+                        <Icon name={can('print_statements') ? "print" : "lock"} size={13} />
+                        <span>{can('print_statements') ? "Print Statement" : "Print Locked"}</span>
+                      </button>
+                    </div>
+                    {reportViewMode === 'statement' ? (
+                      <SupervisorStatementTable group={group} selectedDate={selectedDate} branchName={branchName} />
+                    ) : (
+                      <MatrixTable group={group} showOverall={showOverall} />
+                    )}
+                  </section>)}</div>}
+                </section>}
+              </>
+            )
+          )}
 
-                {supervisorReports.length > 0 && (
-                  <button
-                    type="button"
-                    className="supervisor-statement-top-btn"
-                    onClick={() => {
-                      const target = activeSupervisor !== 'all'
-                        ? (displayedSupervisors[0] ?? supervisorReports[0])
-                        : (displayedSupervisors[0] ?? supervisorReports[0])
-                      if (target) setStatementModalGroup(target)
-                    }}
-                    title="View and print official balance sheet remittance statement"
-                  >
-                    <Icon name="print" size={13} />
-                    <span>Print Statement</span>
-                  </button>
-                )}
-              </div>
-            </div>
-            {!hasAgentFields || !hasSupervisorFields ? <div className="breakdown-note">The current API response does not include {hasAgentFields ? 'supervisor' : hasSupervisorFields ? 'agent' : 'agent or supervisor'} fields, so the available gross is grouped as unspecified. The endpoint must return those fields for an attributed breakdown.</div> : null}
-            {drawRows.length === 0 ? <div className="state-message">No agent report records were returned for {formatDisplayDate(selectedDate)}.</div> : <div className="supervisor-groups">{displayedSupervisors.map((group) => <section className="supervisor-group" key={group.supervisor}>
-              <div className="supervisor-heading">
-                <div className="supervisor-heading-info">
-                  <strong>{group.supervisor}</strong>
-                  <span>{group.agents.length} agents / {drawGroups.length} draw groups</span>
-                </div>
-                <button
-                  type="button"
-                  className="supervisor-heading-statement-btn"
-                  onClick={() => setStatementModalGroup(group)}
-                  title={`Open official financial statement for ${group.supervisor}`}
-                >
-                  <Icon name="fileText" size={13} />
-                  <span>{reportViewMode === 'statement' ? 'Print Statement' : 'Statement View'}</span>
-                </button>
-              </div>
-              {reportViewMode === 'statement' ? (
-                <SupervisorStatementTable group={group} selectedDate={selectedDate} branchName={branchName} />
-              ) : (
-                <MatrixTable group={group} showOverall={showOverall} />
-              )}
-            </section>)}</div>}
-          </section>}
+          {activeView === 'commissions' && (
+            !can('manage_commissions') ? (
+              <AccessRestrictedNotice
+                requiredPermKey="manage_commissions"
+                viewName="Agent Commissions Management"
+                currentUser={currentUser}
+                userPermissions={userPermissions}
+                onSwitchView={setActiveView}
+              />
+            ) : (
+              <CommissionManagementView
+                supervisors={supervisorReports}
+                currentUser={currentUser}
+                can={can}
+                onRatesUpdated={(newSettings) => setCommissionSettings(newSettings)}
+              />
+            )
+          )}
 
           {(activeView === 'rbac' || activeView === 'activity') && (
-            <RbacManagementView
-              currentUser={currentUser}
-              onSimulateUser={(simUser) => {
-                setCurrentUser(simUser)
-                localStorage.setItem('luckybet_user', JSON.stringify(simUser))
-              }}
-              branchName={branchName}
-            />
+            !(activeView === 'rbac' ? can('manage_users') : can('audit_logs')) ? (
+              <AccessRestrictedNotice
+                requiredPermKey={activeView === 'rbac' ? 'manage_users' : 'audit_logs'}
+                viewName={activeView === 'rbac' ? 'Users & RBAC Management' : 'Security & Audit Log'}
+                currentUser={currentUser}
+                userPermissions={userPermissions}
+                onSwitchView={setActiveView}
+              />
+            ) : (
+              <RbacManagementView
+                currentUser={currentUser}
+                onSimulateUser={(simUser) => {
+                  const isTargetAdmin = simUser.role === 'admin'
+                  const updatedUser = {
+                    ...simUser,
+                    simulatedFromAdmin: !isTargetAdmin,
+                  }
+                  setCurrentUser(updatedUser)
+                  localStorage.setItem('luckybet_user', JSON.stringify(updatedUser))
+                }}
+                branchName={branchName}
+                initialTab={activeView === 'activity' ? 'logs' : 'users'}
+              />
+            )
           )}
         </section>
       </main>
@@ -1832,6 +2700,8 @@ function App() {
           branchName={branchName}
           onClose={() => setStatementModalGroup(null)}
           onSelectSupervisor={(newGroup) => setStatementModalGroup(newGroup)}
+          canPrint={can('print_statements')}
+          currentUser={currentUser}
         />
       )}
     </div>

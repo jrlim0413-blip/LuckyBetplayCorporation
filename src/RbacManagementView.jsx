@@ -5,6 +5,11 @@ import {
   saveRbacUsers,
   getRbacRoles,
   saveRbacRoles,
+  getUserCustomPermissions,
+  setUserCustomPermissions,
+  clearUserCustomPermissions,
+  getUserEffectivePermissions,
+  hasPermission,
   PERMISSIONS,
   DEFAULT_ROLES,
   getAuditLogs,
@@ -12,6 +17,11 @@ import {
   getDeletedUsernames,
   recordDeletedUsername,
   unmarkDeletedUsername,
+  isTabPermission,
+  isFeaturePermission,
+  getPermissionMeta,
+  areFeatureParentTabsDisabled,
+  getAffectedFeaturesWhenTabDisabled,
 } from './rbac'
 import {
   isSupabaseConfigured,
@@ -85,26 +95,26 @@ function SvgIcon({ name, size = 16, className = '' }) {
     ),
     key: (
       <>
-        <circle cx="7.5" cy="15.5" r="5.5" />
-        <path d="m21 2-9.6 9.6" />
-        <path d="m15.5 7.5 3 3L22 7l-3-3" />
+        <circle cx="7.5" cy="15.5" r="4.5" />
+        <path d="m11 12 9-9" />
+        <path d="m15.5 7.5 2 2" />
+        <path d="m18 5 2 2" />
       </>
     ),
     lock: (
       <>
-        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <rect width="18" height="11" x="3" y="11" rx="2.5" />
         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
       </>
     ),
     edit: (
-      <>
-        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-      </>
+      <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
     ),
     trash: (
       <>
-        <polyline points="3 6 5 6 21 6" />
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        <path d="M3 6h18" />
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
       </>
     ),
     check: (
@@ -112,16 +122,16 @@ function SvgIcon({ name, size = 16, className = '' }) {
     ),
     search: (
       <>
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        <circle cx="11" cy="11" r="7.5" />
+        <path d="m21 21-4.35-4.35" />
       </>
     ),
     refresh: (
       <>
-        <path d="M20 11a8 8 0 0 0-14.7-3L3 11" />
-        <path d="M3 5v6h6" />
-        <path d="M4 13a8 8 0 0 0 14.7 3L21 13" />
-        <path d="M21 19v-6h-6" />
+        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+        <path d="M16 21h5v-5" />
       </>
     ),
     logIn: (
@@ -138,18 +148,55 @@ function SvgIcon({ name, size = 16, className = '' }) {
       </>
     ),
     activity: (
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
     ),
     slashCircle: (
       <>
-        <circle cx="12" cy="12" r="10" />
-        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+        <circle cx="12" cy="12" r="9" />
+        <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" />
       </>
     ),
     checkCircle: (
       <>
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-        <polyline points="22 4 12 14.01 9 11.01" />
+        <circle cx="12" cy="12" r="9" />
+        <path d="m8.5 12 2.5 2.5 4.5-5" />
+      </>
+    ),
+    folder: (
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    ),
+    tool: (
+      <>
+        <line x1="4" y1="21" x2="4" y2="14" />
+        <line x1="4" y1="10" x2="4" y2="3" />
+        <line x1="12" y1="21" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12" y2="3" />
+        <line x1="20" y1="21" x2="20" y2="16" />
+        <line x1="20" y1="12" x2="20" y2="3" />
+        <line x1="1" y1="14" x2="7" y2="14" />
+        <line x1="9" y1="8" x2="15" y2="8" />
+        <line x1="17" y1="16" x2="23" y2="16" />
+      </>
+    ),
+    layers: (
+      <>
+        <path d="m12 2 9 4.5-9 4.5-9-4.5Z" />
+        <path d="m3 11 9 4.5 9-4.5" />
+        <path d="m3 16 9 4.5 9-4.5" />
+      </>
+    ),
+    alertTriangle: (
+      <>
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </>
+    ),
+    info: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <line x1="12" y1="16" x2="12" y2="11" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
       </>
     ),
   }
@@ -162,7 +209,7 @@ function SvgIcon({ name, size = 16, className = '' }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="1.65"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -172,11 +219,31 @@ function SvgIcon({ name, size = 16, className = '' }) {
   )
 }
 
-export default function RbacManagementView({ currentUser, onSimulateUser, branchName = 'Mandaue' }) {
+export default function RbacManagementView({ currentUser, onSimulateUser, branchName = 'Mandaue', initialTab = 'users' }) {
   const [users, setUsers] = useState(() => getRbacUsers())
   const [roles, setRoles] = useState(() => getRbacRoles())
   const [auditLogs, setAuditLogs] = useState(() => getAuditLogs())
-  const [activeTab, setActiveTab] = useState('users') // 'users' | 'matrix' | 'logs'
+  const [activeTab, setActiveTab] = useState(initialTab || 'users') // 'users' | 'matrix' | 'logs'
+  const [matrixViewMode, setMatrixViewMode] = useState('roles') // 'roles' | 'accounts'
+  const [accountPermsRev, setAccountPermsRev] = useState(0)
+
+  const canSwitchAccounts = currentUser?.role === 'admin' || Boolean(currentUser?.simulatedFromAdmin)
+
+  // Listen for rbac updates across sessions
+  useEffect(() => {
+    const handleRbacUpdate = () => {
+      setRoles(getRbacRoles())
+      setUsers(getRbacUsers())
+      setAuditLogs(getAuditLogs())
+      setAccountPermsRev((prev) => prev + 1)
+    }
+    window.addEventListener('luckybet_rbac_change', handleRbacUpdate)
+    return () => window.removeEventListener('luckybet_rbac_change', handleRbacUpdate)
+  }, [])
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab)
+  }, [initialTab])
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('')
@@ -244,10 +311,37 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
     email: '',
   })
 
-  const showNotification = (msg) => {
-    setFeedbackNotice(msg)
-    setTimeout(() => setFeedbackNotice(''), 3500)
+  const showNotification = (notice, type = 'info', title = '') => {
+    if (typeof notice === 'object' && notice !== null) {
+      setFeedbackNotice({
+        type: notice.type || 'info',
+        title: notice.title || '',
+        message: notice.message || '',
+      })
+    } else {
+      setFeedbackNotice({
+        type,
+        title,
+        message: String(notice || ''),
+      })
+    }
   }
+
+  useEffect(() => {
+    if (!feedbackNotice) return
+    const duration =
+      typeof feedbackNotice === 'object' &&
+      (feedbackNotice.type === 'warning' || feedbackNotice.type === 'error')
+        ? 6000
+        : 3800
+    const timer = setTimeout(() => {
+      setFeedbackNotice(null)
+    }, duration)
+    return () => clearTimeout(timer)
+  }, [feedbackNotice])
+
+  const tabPerms = useMemo(() => PERMISSIONS.filter((p) => p.type === 'tab'), [])
+  const featurePerms = useMemo(() => PERMISSIONS.filter((p) => p.type === 'feature'), [])
 
   // Filtered Users List
   const filteredUsers = useMemo(() => {
@@ -488,20 +582,50 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
     }
   }
 
-  // Toggle permission in the matrix
+  // Toggle permission in the matrix by Role Tier
   const handleTogglePermission = (roleKey, permKey) => {
-    if (roleKey === 'admin') {
-      // Super admin maintains all permissions for security integrity
-      return
-    }
-
     const currentRole = roles[roleKey]
     if (!currentRole) return
 
     const currentPerms = currentRole.permissions || []
-    const nextPerms = currentPerms.includes(permKey)
-      ? currentPerms.filter((p) => p !== permKey)
-      : [...currentPerms, permKey]
+    const isCurrentlyGranted = currentPerms.includes(permKey)
+    const permMeta = getPermissionMeta(permKey)
+    const isTab = permMeta.type === 'tab'
+    const isFeature = permMeta.type === 'feature'
+
+    // RULE 1: IF TOGGLING ON A FEATURE WHOSE PARENT TAB IS DISABLED
+    if (!isCurrentlyGranted && isFeature) {
+      if (areFeatureParentTabsDisabled(permKey, currentPerms)) {
+        showNotification({
+          type: 'warning',
+          title: '🚫 FEATURE CANNOT BE ENABLED',
+          message: `The FEATURE "${permMeta.label}" cannot be enabled for ${currentRole.label} because its parent workspace tab is DISABLED (${permMeta.parentTabLabels?.join(' or ')}). Please enable the corresponding workspace tab above first!`,
+        })
+        return
+      }
+    }
+
+    if (roleKey === 'admin' && permKey === 'manage_users' && isCurrentlyGranted) {
+      if (!confirm('Warning: Disabling "manage_users" for System Administrator will restrict access to this RBAC management panel. Are you sure you want to test this?')) {
+        return
+      }
+    }
+
+    // RULE 2: IF TOGGLING OFF A TAB, CHECK FOR DEPENDENT FEATURES
+    let nextPerms = []
+    let autoDisabledFeatures = []
+
+    if (isCurrentlyGranted) {
+      if (isTab) {
+        autoDisabledFeatures = getAffectedFeaturesWhenTabDisabled(permKey, currentPerms)
+        const autoDisabledKeys = autoDisabledFeatures.map((f) => f.key)
+        nextPerms = currentPerms.filter((p) => p !== permKey && !autoDisabledKeys.includes(p))
+      } else {
+        nextPerms = currentPerms.filter((p) => p !== permKey)
+      }
+    } else {
+      nextPerms = [...currentPerms, permKey]
+    }
 
     const updatedRoles = {
       ...roles,
@@ -514,15 +638,204 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
     setRoles(updatedRoles)
     saveRbacRoles(updatedRoles)
 
-    const updatedLogs = addAuditLog(
-      'RBAC_PERMISSION_TOGGLED',
-      `Role ${currentRole.label}: permission "${permKey}" was ${currentPerms.includes(permKey) ? 'revoked' : 'granted'}`,
-      currentUser?.username || 'admin',
-      'info'
-    )
-    setAuditLogs(updatedLogs)
+    const affectedUsers = users.filter((u) => u.role === roleKey).map((u) => u.name).join(', ')
 
-    showNotification(`Updated permissions for ${currentRole.label}.`)
+    // AUDIT LOG & DETAILED USER NOTIFICATION (ENGLISH)
+    if (isCurrentlyGranted) {
+      // Disabled action
+      if (isTab) {
+        addAuditLog(
+          'RBAC_TAB_DISABLED',
+          `Workspace TAB "${permMeta.label}" (${permKey}) was DISABLED for role ${currentRole.label}${autoDisabledFeatures.length > 0 ? ` (dependent in-tab features also disabled: ${autoDisabledFeatures.map((f) => f.key).join(', ')})` : ''}`,
+          currentUser?.username || 'admin',
+          'warning'
+        )
+        if (autoDisabledFeatures.length > 0) {
+          showNotification({
+            type: 'warning',
+            title: '⚠️ TAB DISABLED',
+            message: `The workspace TAB "${permMeta.label}" was DISABLED for ${currentRole.label}. The dependent feature(s) inside (${autoDisabledFeatures.map((f) => `"${f.label}"`).join(', ')}) were automatically disabled because their parent tab is closed in sidebar navigation.`,
+          })
+        } else {
+          showNotification({
+            type: 'info',
+            title: '❌ TAB DISABLED',
+            message: `The workspace TAB "${permMeta.label}" was disabled for ${currentRole.label} and removed from sidebar navigation${affectedUsers ? ` (${affectedUsers})` : ''}.`,
+          })
+        }
+      } else {
+        addAuditLog(
+          'RBAC_FEATURE_DISABLED',
+          `In-tab FEATURE "${permMeta.label}" (${permKey}) was DISABLED for role ${currentRole.label}`,
+          currentUser?.username || 'admin',
+          'info'
+        )
+        showNotification({
+          type: 'info',
+          title: '❌ FEATURE DISABLED',
+          message: `The FEATURE "${permMeta.label}" was disabled for ${currentRole.label}${affectedUsers ? ` (${affectedUsers})` : ''}.`,
+        })
+      }
+    } else {
+      // Enabled action
+      if (isTab) {
+        addAuditLog(
+          'RBAC_TAB_ENABLED',
+          `Workspace TAB "${permMeta.label}" (${permKey}) was ENABLED for role ${currentRole.label}`,
+          currentUser?.username || 'admin',
+          'success'
+        )
+        showNotification({
+          type: 'success',
+          title: '✅ TAB ENABLED',
+          message: `The workspace TAB "${permMeta.label}" was enabled for ${currentRole.label} and is now accessible in sidebar navigation!`,
+        })
+      } else {
+        addAuditLog(
+          'RBAC_FEATURE_ENABLED',
+          `In-tab FEATURE "${permMeta.label}" (${permKey}) was ENABLED for role ${currentRole.label}`,
+          currentUser?.username || 'admin',
+          'success'
+        )
+        showNotification({
+          type: 'success',
+          title: '✅ FEATURE ENABLED',
+          message: `The FEATURE "${permMeta.label}" was enabled for ${currentRole.label} inside ${permMeta.parentTabLabels?.join(' & ') || 'tab'}.`,
+        })
+      }
+    }
+
+    if (currentUser?.role === roleKey && typeof onSimulateUser === 'function') {
+      onSimulateUser({
+        ...currentUser,
+        permissions: nextPerms,
+      })
+    }
+  }
+
+  // Toggle permission specifically for an individual Account ("depende sa account")
+  const handleToggleAccountPermission = (targetUser, permKey) => {
+    const currentPerms = getUserEffectivePermissions(targetUser, roles)
+    const isCurrentlyGranted = currentPerms.includes(permKey)
+    const permMeta = getPermissionMeta(permKey)
+    const isTab = permMeta.type === 'tab'
+    const isFeature = permMeta.type === 'feature'
+
+    // RULE 1: IF TOGGLING ON A FEATURE WHOSE PARENT TAB IS DISABLED FOR THIS ACCOUNT
+    if (!isCurrentlyGranted && isFeature) {
+      if (areFeatureParentTabsDisabled(permKey, currentPerms)) {
+        showNotification({
+          type: 'warning',
+          title: '🚫 FEATURE CANNOT BE ENABLED',
+          message: `The FEATURE "${permMeta.label}" cannot be enabled for @${targetUser.username} (${targetUser.name}) because its parent workspace tab is DISABLED (${permMeta.parentTabLabels?.join(' or ')}). Please enable the corresponding workspace tab above for this account first!`,
+        })
+        return
+      }
+    }
+
+    // RULE 2: IF TOGGLING OFF A TAB, CHECK FOR DEPENDENT FEATURES
+    let nextPerms = []
+    let autoDisabledFeatures = []
+
+    if (isCurrentlyGranted) {
+      if (isTab) {
+        autoDisabledFeatures = getAffectedFeaturesWhenTabDisabled(permKey, currentPerms)
+        const autoDisabledKeys = autoDisabledFeatures.map((f) => f.key)
+        nextPerms = currentPerms.filter((p) => p !== permKey && !autoDisabledKeys.includes(p))
+      } else {
+        nextPerms = currentPerms.filter((p) => p !== permKey)
+      }
+    } else {
+      nextPerms = [...currentPerms, permKey]
+    }
+
+    setUserCustomPermissions(targetUser.username, nextPerms)
+    setAccountPermsRev((prev) => prev + 1)
+
+    // AUDIT LOG & NOTIFICATIONS (ENGLISH)
+    if (isCurrentlyGranted) {
+      if (isTab) {
+        addAuditLog(
+          'RBAC_USER_TAB_DISABLED',
+          `Workspace TAB "${permMeta.label}" was DISABLED for account @${targetUser.username}`,
+          currentUser?.username || 'admin',
+          'warning'
+        )
+        if (autoDisabledFeatures.length > 0) {
+          showNotification({
+            type: 'warning',
+            title: '⚠️ TAB DISABLED',
+            message: `The workspace TAB "${permMeta.label}" was DISABLED for @${targetUser.username}. The dependent feature(s) inside (${autoDisabledFeatures.map((f) => `"${f.label}"`).join(', ')}) were automatically disabled because their parent tab is closed in sidebar navigation.`,
+          })
+        } else {
+          showNotification({
+            type: 'info',
+            title: '❌ TAB DISABLED',
+            message: `The workspace TAB "${permMeta.label}" was disabled for @${targetUser.username} and removed from their sidebar navigation.`,
+          })
+        }
+      } else {
+        addAuditLog(
+          'RBAC_USER_FEATURE_DISABLED',
+          `In-tab FEATURE "${permMeta.label}" was DISABLED for account @${targetUser.username}`,
+          currentUser?.username || 'admin',
+          'info'
+        )
+        showNotification({
+          type: 'info',
+          title: '❌ FEATURE DISABLED',
+          message: `The FEATURE "${permMeta.label}" was disabled for @${targetUser.username} (${targetUser.name}).`,
+        })
+      }
+    } else {
+      if (isTab) {
+        addAuditLog(
+          'RBAC_USER_TAB_ENABLED',
+          `Workspace TAB "${permMeta.label}" was ENABLED for account @${targetUser.username}`,
+          currentUser?.username || 'admin',
+          'success'
+        )
+        showNotification({
+          type: 'success',
+          title: '✅ TAB ENABLED',
+          message: `The workspace TAB "${permMeta.label}" was enabled for @${targetUser.username} and is now accessible in their sidebar navigation!`,
+        })
+      } else {
+        addAuditLog(
+          'RBAC_USER_FEATURE_ENABLED',
+          `In-tab FEATURE "${permMeta.label}" was ENABLED for account @${targetUser.username}`,
+          currentUser?.username || 'admin',
+          'success'
+        )
+        showNotification({
+          type: 'success',
+          title: '✅ FEATURE ENABLED',
+          message: `The FEATURE "${permMeta.label}" was enabled for @${targetUser.username} inside ${permMeta.parentTabLabels?.join(' & ') || 'tab'}.`,
+        })
+      }
+    }
+
+    if (currentUser?.username?.toLowerCase() === targetUser.username?.toLowerCase() && typeof onSimulateUser === 'function') {
+      onSimulateUser({
+        ...currentUser,
+        permissions: nextPerms,
+      })
+    }
+  }
+
+  // Reset custom permissions for an individual account back to role defaults
+  const handleResetAccountPermissions = (targetUser) => {
+    clearUserCustomPermissions(targetUser.username)
+    setAccountPermsRev((prev) => prev + 1)
+    const roleDef = roles[targetUser.role] || DEFAULT_ROLES[targetUser.role]
+    showNotification(`Reset @${targetUser.username} to standard ${roleDef?.label || targetUser.role} permissions.`)
+
+    if (currentUser?.username?.toLowerCase() === targetUser.username?.toLowerCase() && typeof onSimulateUser === 'function') {
+      onSimulateUser({
+        ...currentUser,
+        permissions: roleDef?.permissions || [],
+      })
+    }
   }
 
   // Reset Role Matrix to Defaults
@@ -580,9 +893,92 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
       </div>
 
       {feedbackNotice && (
-        <div className="rbac-feedback-toast" role="status">
-          <SvgIcon name="check" size={15} />
-          <span>{feedbackNotice}</span>
+        <div
+          className={`rbac-feedback-toast toast-${typeof feedbackNotice === 'object' ? feedbackNotice.type || 'info' : 'info'}`}
+          role="status"
+        >
+          <div className="toast-icon-wrap">
+            <SvgIcon
+              name={
+                typeof feedbackNotice === 'object' &&
+                (feedbackNotice.type === 'warning' || feedbackNotice.type === 'error')
+                  ? 'alertTriangle'
+                  : typeof feedbackNotice === 'object' && feedbackNotice.type === 'info'
+                  ? 'info'
+                  : 'checkCircle'
+              }
+              size={18}
+            />
+          </div>
+          <div className="toast-content-wrap">
+            {typeof feedbackNotice === 'object' && feedbackNotice.title && (
+              <strong className="toast-title">{feedbackNotice.title}</strong>
+            )}
+            <p className="toast-message">
+              {typeof feedbackNotice === 'object' ? feedbackNotice.message : feedbackNotice}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="toast-close-btn"
+            onClick={() => setFeedbackNotice(null)}
+            title="Dismiss notification"
+          >
+            <SvgIcon name="x" size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* Interactive Active Test Session Simulator Bar (Admin Only) */}
+      {canSwitchAccounts && (
+        <div className="rbac-simulator-bar">
+          <div className="simulator-label-group">
+            <span className="simulator-pulse-dot" />
+            <span className="simulator-title">Active Session Account:</span>
+            <div className="simulator-current-user">
+              <strong>{currentUser?.name || 'Administrator'}</strong>
+              <span className="simulator-role-chip">{currentUser?.roleLabel || currentUser?.role || 'Admin'}</span>
+            </div>
+          </div>
+          <div className="simulator-quick-buttons">
+            <span className="simulator-quick-label">Switch Test Account:</span>
+            {users.slice(0, 5).map((u) => {
+              const isCurrent = currentUser?.username?.toLowerCase() === u.username.toLowerCase()
+              const uPerms = getUserEffectivePermissions(u, roles)
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  className={`simulator-account-btn ${isCurrent ? 'is-active' : ''}`}
+                  onClick={() => {
+                    const rDef = roles[u.role] || DEFAULT_ROLES[u.role] || DEFAULT_ROLES.staff
+                    const isTargetAdmin = u.role === 'admin'
+                    if (typeof onSimulateUser === 'function') {
+                      onSimulateUser({
+                        username: u.username,
+                        name: u.name,
+                        role: u.role,
+                        roleLabel: rDef.label,
+                        roleBadge: rDef.badge,
+                        branch: u.branch,
+                        avatar: u.avatar || u.name.substring(0, 2).toUpperCase(),
+                        token: 'rbac-token-' + u.id,
+                        loginTime: new Date().toISOString(),
+                        permissions: uPerms,
+                        simulatedFromAdmin: !isTargetAdmin,
+                      })
+                      showNotification(`Switched active session to @${u.username} (${rDef.label})`)
+                    }
+                  }}
+                  title={`Switch active test session to @${u.username} (${u.role}) - ${uPerms.length}/6 permissions enabled`}
+                >
+                  <span className="sim-btn-avatar">{u.avatar || u.name.substring(0, 2).toUpperCase()}</span>
+                  <span className="sim-btn-name">{u.name.split(' ')[0]}</span>
+                  <span className="sim-btn-role">({u.role})</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -734,30 +1130,34 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                   </div>
 
                   <div className="rbac-user-card-footer">
-                    <button
-                      type="button"
-                      className="rbac-simulate-user-btn"
-                      onClick={() => {
-                        if (typeof onSimulateUser === 'function') {
-                          onSimulateUser({
-                            username: user.username,
-                            name: user.name,
-                            role: user.role,
-                            roleLabel: roleDef.label,
-                            roleBadge: roleDef.badge,
-                            branch: user.branch,
-                            avatar: user.avatar,
-                            token: 'rbac-token-' + user.id,
-                            loginTime: new Date().toISOString(),
-                          })
-                          showNotification(`Switched active session to @${user.username} (${roleDef.label})`)
-                        }
-                      }}
-                      title="Instantly test dashboard and permissions as this user"
-                    >
-                      <SvgIcon name="logIn" size={13} />
-                      <span>{isCurrentActive ? 'Current Session' : 'Login as User'}</span>
-                    </button>
+                    {canSwitchAccounts && (
+                      <button
+                        type="button"
+                        className="rbac-simulate-user-btn"
+                        onClick={() => {
+                          if (typeof onSimulateUser === 'function') {
+                            const isTargetAdmin = user.role === 'admin'
+                            onSimulateUser({
+                              username: user.username,
+                              name: user.name,
+                              role: user.role,
+                              roleLabel: roleDef.label,
+                              roleBadge: roleDef.badge,
+                              branch: user.branch,
+                              avatar: user.avatar,
+                              token: 'rbac-token-' + user.id,
+                              loginTime: new Date().toISOString(),
+                              simulatedFromAdmin: !isTargetAdmin,
+                            })
+                            showNotification(`Switched active session to @${user.username} (${roleDef.label})`)
+                          }
+                        }}
+                        title="Instantly test dashboard and permissions as this user"
+                      >
+                        <SvgIcon name="logIn" size={13} />
+                        <span>{isCurrentActive ? 'Current Session' : 'Login as User'}</span>
+                      </button>
+                    )}
 
                     <div className="rbac-card-manage-btns">
                       <button
@@ -817,101 +1217,432 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
       )}
 
       {/* ===================================================================== */}
-      {/* TAB 2: ROLE PERMISSIONS MATRIX                                       */}
+      {/* TAB 2: ROLE & ACCOUNT PERMISSIONS MATRIX                              */}
       {/* ===================================================================== */}
       {activeTab === 'matrix' && (
         <div className="rbac-matrix-container">
           <div className="rbac-matrix-header-box">
             <div>
-              <h3>Role Capabilities Matrix</h3>
+              <h3>Role &amp; Account Capabilities Matrix</h3>
               <p>
-                Toggle operational privileges for each role tier. System Administrator holds immutable master rights.
+                Configure operational permissions by role tier or customize access specifically per individual account.
               </p>
             </div>
-            <button
-              type="button"
-              className="rbac-secondary-btn"
-              onClick={handleResetRoles}
-            >
-              <SvgIcon name="refresh" size={14} />
-              <span>Reset Defaults</span>
-            </button>
+            <div className="rbac-matrix-header-right">
+              <button
+                type="button"
+                className="rbac-secondary-btn"
+                onClick={handleResetRoles}
+                title="Restore matrix to factory default permissions"
+              >
+                <SvgIcon name="refresh" size={14} />
+                <span>Reset Defaults</span>
+              </button>
+            </div>
           </div>
 
-          <div className="rbac-matrix-table-wrap">
-            <table className="rbac-matrix-table">
-              <thead>
-                <tr>
-                  <th className="perm-header-col">System Capability</th>
-                  {Object.keys(roles).map((rKey) => {
-                    const r = roles[rKey]
-                    return (
-                      <th key={rKey} className="role-col-header">
-                        <div
-                          className="role-header-chip"
-                          style={{
-                            color: r.color,
-                            background: r.bgColor,
-                            borderColor: r.borderColor,
-                          }}
-                        >
-                          <SvgIcon name="shieldCheck" size={12} />
-                          <span>{r.label}</span>
-                        </div>
-                      </th>
-                    )
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {PERMISSIONS.map((perm) => (
-                  <tr key={perm.key}>
-                    <td className="perm-cell-label">
-                      <strong>{perm.label}</strong>
-                      <span className="perm-group-tag">{perm.group}</span>
-                    </td>
+          {/* Mode Selector: By Role Tier vs By Individual Account */}
+          <div className="rbac-matrix-mode-bar">
+            <div className="matrix-mode-toggle-group">
+              <button
+                type="button"
+                className={`matrix-mode-btn ${matrixViewMode === 'roles' ? 'active' : ''}`}
+                onClick={() => setMatrixViewMode('roles')}
+              >
+                <SvgIcon name="shieldCheck" size={13} />
+                <span>By Role Tier ({Object.keys(roles).length})</span>
+              </button>
+              <button
+                type="button"
+                className={`matrix-mode-btn ${matrixViewMode === 'accounts' ? 'active' : ''}`}
+                onClick={() => setMatrixViewMode('accounts')}
+              >
+                <SvgIcon name="users" size={13} />
+                <span>By Specific Account ({users.length})</span>
+              </button>
+            </div>
+            <span className="matrix-mode-hint">
+              {matrixViewMode === 'roles'
+                ? '⚡ Toggling a capability updates all accounts assigned to that role tier.'
+                : '🎯 Toggling a capability customizes access specifically for that individual user account.'}
+            </span>
+          </div>
+
+          {matrixViewMode === 'roles' ? (
+            /* MODE 1: MATRIX BY ROLE TIER */
+            <div className="rbac-matrix-table-wrap">
+              <table className="rbac-matrix-table">
+                <thead>
+                  <tr>
+                    <th className="perm-header-col">System Capability</th>
                     {Object.keys(roles).map((rKey) => {
                       const r = roles[rKey]
-                      const isGranted = rKey === 'admin' ? true : (r.permissions || []).includes(perm.key)
-                      const isLocked = rKey === 'admin'
+                      const assignedUsers = users.filter((u) => u.role === rKey)
+                      const isUserRole = currentUser?.role === rKey
 
                       return (
-                        <td key={`${rKey}-${perm.key}`} className="matrix-check-cell">
-                          <label
-                            className={`rbac-perm-toggle ${isGranted ? 'granted' : 'denied'} ${
-                              isLocked ? 'locked' : ''
-                            }`}
-                            title={
-                              isLocked
-                                ? 'System Administrator permissions are permanently enforced'
-                                : `Click to toggle "${perm.label}" for ${r.label}`
-                            }
+                        <th key={rKey} className={`role-col-header ${isUserRole ? 'is-current-user-role' : ''}`}>
+                          <div
+                            className="role-header-chip"
+                            style={{
+                              color: r.color,
+                              background: r.bgColor,
+                              borderColor: r.borderColor,
+                            }}
                           >
-                            <input
-                              type="checkbox"
-                              checked={isGranted}
-                              disabled={isLocked}
-                              onChange={() => handleTogglePermission(rKey, perm.key)}
-                            />
-                            <span className="rbac-perm-indicator">
-                              {isGranted ? (
-                                <>
-                                  <SvgIcon name="check" size={12} />
-                                  <span>Enabled</span>
-                                </>
-                              ) : (
-                                <span className="denied-text">Disabled</span>
-                              )}
-                            </span>
-                          </label>
-                        </td>
+                            <SvgIcon name="shieldCheck" size={12} />
+                            <span>{r.label}</span>
+                          </div>
+                          <div className="role-assigned-accounts-list">
+                            <span className="role-accounts-count">{assignedUsers.length} accounts:</span>
+                            {assignedUsers.map((u) => (
+                              <span key={u.id} className="role-user-tag" title={`@${u.username}`}>
+                                {u.name.split(' ')[0]}
+                              </span>
+                            ))}
+                            {assignedUsers.length === 0 && <span className="no-accounts-tag">No accounts</span>}
+                          </div>
+                        </th>
                       )
                     })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {/* SECTION 1: WORKSPACE TABS */}
+                  <tr className="matrix-section-divider-row section-tabs-row">
+                    <td colSpan={1 + Object.keys(roles).length}>
+                      <div className="matrix-section-banner">
+                        <div className="section-banner-title">
+                          <SvgIcon name="folder" size={15} />
+                          <span>📁 WORKSPACE TABS (Sidebar Navigation)</span>
+                        </div>
+                        <span className="section-banner-desc">
+                          Controls which workspace menus appear in the left sidebar navigation.
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {tabPerms.map((perm) => (
+                    <tr key={perm.key} className="matrix-perm-row perm-kind-tab-row">
+                      <td className="perm-cell-label perm-type-tab">
+                        <div className="perm-title-row">
+                          <span className="perm-kind-badge kind-tab" title="Sidebar Workspace Tab">
+                            <SvgIcon name="folder" size={11} /> TAB
+                          </span>
+                          <strong className="perm-title-text">{perm.label}</strong>
+                        </div>
+                        <span className="perm-group-tag">
+                          Sidebar Menu: <code>{perm.tabName}</code> &bull; <code>{perm.key}</code>
+                        </span>
+                        {perm.description && (
+                          <span className="perm-desc-hint">{perm.description}</span>
+                        )}
+                      </td>
+                      {Object.keys(roles).map((rKey) => {
+                        const r = roles[rKey]
+                        const isGranted = (r.permissions || []).includes(perm.key)
+
+                        return (
+                          <td key={`${rKey}-${perm.key}`} className="matrix-check-cell">
+                            <label
+                              className={`ios-switch-cell ${isGranted ? 'is-granted' : 'is-denied'}`}
+                              title={`Click to toggle workspace tab "${perm.label}" for all ${r.label} accounts`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="ios-switch-input"
+                                checked={isGranted}
+                                onChange={() => handleTogglePermission(rKey, perm.key)}
+                              />
+                              <span className="ios-switch-control">
+                                <span className="ios-switch-track">
+                                  <span className="ios-switch-thumb" />
+                                </span>
+                                <span className="ios-switch-state-text">{isGranted ? 'ON' : 'OFF'}</span>
+                              </span>
+                            </label>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+
+                  {/* SECTION 2: IN-TAB FEATURES */}
+                  <tr className="matrix-section-divider-row section-features-row">
+                    <td colSpan={1 + Object.keys(roles).length}>
+                      <div className="matrix-section-banner">
+                        <div className="section-banner-title">
+                          <SvgIcon name="tool" size={15} />
+                          <span>⚙️ IN-TAB FEATURES (Operations &amp; Tools Inside Tabs)</span>
+                        </div>
+                        <span className="section-banner-desc">
+                          Operational actions and tools inside workspaces. Cannot be enabled if parent tab is disabled.
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {featurePerms.map((perm) => (
+                    <tr key={perm.key} className="matrix-perm-row perm-kind-feature-row">
+                      <td className="perm-cell-label perm-type-feature">
+                        <div className="perm-title-row">
+                          <span className="perm-kind-badge kind-feature" title="In-Tab Action & Tool">
+                            <SvgIcon name="tool" size={11} /> FEATURE
+                          </span>
+                          <strong className="perm-title-text">{perm.label}</strong>
+                        </div>
+                        <div className="perm-parent-link-row">
+                          <span className="perm-parent-label">📍 Belongs to Tab:</span>
+                          <div className="perm-parent-pills">
+                            {perm.parentTabLabels?.map((label, idx) => (
+                              <span key={idx} className="perm-parent-pill">{label}</span>
+                            ))}
+                          </div>
+                        </div>
+                        {perm.description && (
+                          <span className="perm-desc-hint">{perm.description}</span>
+                        )}
+                      </td>
+                      {Object.keys(roles).map((rKey) => {
+                        const r = roles[rKey]
+                        const isGranted = (r.permissions || []).includes(perm.key)
+                        const isParentDisabled = areFeatureParentTabsDisabled(perm.key, r.permissions || [])
+
+                        return (
+                          <td key={`${rKey}-${perm.key}`} className="matrix-check-cell">
+                            <label
+                              className={`ios-switch-cell ${isGranted ? 'is-granted' : 'is-denied'} ${isParentDisabled ? 'is-parent-disabled' : ''}`}
+                              title={
+                                isParentDisabled
+                                  ? `⚠️ Parent tab is disabled (${perm.parentTabLabels?.join(' or ')}). Please enable the corresponding workspace tab above to use this feature!`
+                                  : `Click to toggle feature "${perm.label}" for all ${r.label} accounts`
+                              }
+                            >
+                              <input
+                                type="checkbox"
+                                className="ios-switch-input"
+                                checked={isGranted}
+                                onChange={() => handleTogglePermission(rKey, perm.key)}
+                              />
+                              <span className="ios-switch-control">
+                                <span className="ios-switch-track">
+                                  <span className="ios-switch-thumb" />
+                                </span>
+                                <span className="ios-switch-state-text">{isGranted ? 'ON' : 'OFF'}</span>
+                              </span>
+                              {isParentDisabled && (
+                                <span className="cell-parent-disabled-hint">⚠️ Tab Disabled</span>
+                              )}
+                            </label>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            /* MODE 2: MATRIX BY SPECIFIC ACCOUNT ("By Individual Account") */
+            <div className="rbac-matrix-table-wrap">
+              <table className="rbac-matrix-table account-matrix-table">
+                <thead>
+                  <tr>
+                    <th className="perm-header-col">System Capability</th>
+                    {users.map((u) => {
+                      const r = roles[u.role] || DEFAULT_ROLES[u.role] || DEFAULT_ROLES.staff
+                      const hasCustom = Boolean(getUserCustomPermissions(u.username))
+                      const isCurrent = currentUser?.username?.toLowerCase() === u.username.toLowerCase()
+
+                      return (
+                        <th key={u.id} className={`role-col-header user-col-header ${isCurrent ? 'is-active-col' : ''}`}>
+                          <div className="user-header-box">
+                            <div className="user-header-top">
+                              <span className="user-header-avatar">{u.avatar || u.name.substring(0, 2).toUpperCase()}</span>
+                              <div className="user-header-identity">
+                                <strong>{u.name}</strong>
+                                <code>@{u.username}</code>
+                              </div>
+                            </div>
+                            <div className="user-header-tags">
+                              <span
+                                className="user-header-role"
+                                style={{
+                                  color: r.color,
+                                  background: r.bgColor,
+                                  borderColor: r.borderColor,
+                                }}
+                              >
+                                {r.label}
+                              </span>
+                              {hasCustom ? (
+                                <div className="custom-override-group">
+                                  <span className="custom-override-tag">Custom Overrides</span>
+                                  <button
+                                    type="button"
+                                    className="user-reset-perm-btn"
+                                    onClick={() => handleResetAccountPermissions(u)}
+                                    title="Revert this account back to standard role defaults"
+                                  >
+                                    Reset
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="role-default-tag">Role Defaults</span>
+                              )}
+                            </div>
+                          </div>
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* SECTION 1: WORKSPACE TABS */}
+                  <tr className="matrix-section-divider-row section-tabs-row">
+                    <td colSpan={1 + users.length}>
+                      <div className="matrix-section-banner">
+                        <div className="section-banner-title">
+                          <SvgIcon name="folder" size={15} />
+                          <span>📁 WORKSPACE TABS (Sidebar Navigation)</span>
+                        </div>
+                        <span className="section-banner-desc">
+                          Controls which workspace menus appear in each user account's sidebar navigation.
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {tabPerms.map((perm) => (
+                    <tr key={perm.key} className="matrix-perm-row perm-kind-tab-row">
+                      <td className="perm-cell-label perm-type-tab">
+                        <div className="perm-title-row">
+                          <span className="perm-kind-badge kind-tab" title="Sidebar Workspace Tab">
+                            <SvgIcon name="folder" size={11} /> TAB
+                          </span>
+                          <strong className="perm-title-text">{perm.label}</strong>
+                        </div>
+                        <span className="perm-group-tag">
+                          Sidebar Menu: <code>{perm.tabName}</code> &bull; <code>{perm.key}</code>
+                        </span>
+                        {perm.description && (
+                          <span className="perm-desc-hint">{perm.description}</span>
+                        )}
+                      </td>
+                      {users.map((u) => {
+                        const userEffectivePerms = getUserEffectivePermissions(u, roles)
+                        const isGranted = userEffectivePerms.includes(perm.key)
+                        const hasCustom = Boolean(getUserCustomPermissions(u.username))
+
+                        return (
+                          <td key={`${u.id}-${perm.key}`} className="matrix-check-cell">
+                            <label
+                              className={`ios-switch-cell ${isGranted ? 'is-granted' : 'is-denied'} ${hasCustom ? 'is-custom-override' : ''}`}
+                              title={`Click to toggle workspace tab "${perm.label}" specifically for ${u.name} (@${u.username})`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="ios-switch-input"
+                                checked={isGranted}
+                                onChange={() => handleToggleAccountPermission(u, perm.key)}
+                              />
+                              <span className="ios-switch-control">
+                                <span className="ios-switch-track">
+                                  <span className="ios-switch-thumb" />
+                                </span>
+                                <span className="ios-switch-state-text">{isGranted ? 'ON' : 'OFF'}</span>
+                              </span>
+                              {hasCustom && (
+                                <span className="custom-override-dot" title="Custom override for this account" />
+                              )}
+                            </label>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+
+                  {/* SECTION 2: IN-TAB FEATURES */}
+                  <tr className="matrix-section-divider-row section-features-row">
+                    <td colSpan={1 + users.length}>
+                      <div className="matrix-section-banner">
+                        <div className="section-banner-title">
+                          <SvgIcon name="tool" size={15} />
+                          <span>⚙️ IN-TAB FEATURES (Operations &amp; Tools Inside Tabs)</span>
+                        </div>
+                        <span className="section-banner-desc">
+                          Operational actions and tools inside workspaces. Cannot be enabled if parent tab is disabled.
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {featurePerms.map((perm) => (
+                    <tr key={perm.key} className="matrix-perm-row perm-kind-feature-row">
+                      <td className="perm-cell-label perm-type-feature">
+                        <div className="perm-title-row">
+                          <span className="perm-kind-badge kind-feature" title="In-Tab Action & Tool">
+                            <SvgIcon name="tool" size={11} /> FEATURE
+                          </span>
+                          <strong className="perm-title-text">{perm.label}</strong>
+                        </div>
+                        <div className="perm-parent-link-row">
+                          <span className="perm-parent-label">📍 Belongs to Tab:</span>
+                          <div className="perm-parent-pills">
+                            {perm.parentTabLabels?.map((label, idx) => (
+                              <span key={idx} className="perm-parent-pill">{label}</span>
+                            ))}
+                          </div>
+                        </div>
+                        {perm.description && (
+                          <span className="perm-desc-hint">{perm.description}</span>
+                        )}
+                      </td>
+                      {users.map((u) => {
+                        const userEffectivePerms = getUserEffectivePermissions(u, roles)
+                        const isGranted = userEffectivePerms.includes(perm.key)
+                        const hasCustom = Boolean(getUserCustomPermissions(u.username))
+                        const isParentDisabled = areFeatureParentTabsDisabled(perm.key, userEffectivePerms)
+
+                        return (
+                          <td key={`${u.id}-${perm.key}`} className="matrix-check-cell">
+                            <label
+                              className={`ios-switch-cell ${isGranted ? 'is-granted' : 'is-denied'} ${hasCustom ? 'is-custom-override' : ''} ${isParentDisabled ? 'is-parent-disabled' : ''}`}
+                              title={
+                                isParentDisabled
+                                  ? `⚠️ Parent tab is disabled (${perm.parentTabLabels?.join(' or ')}). Please enable the corresponding workspace tab for @${u.username} first!`
+                                  : `Click to toggle feature "${perm.label}" specifically for ${u.name} (@${u.username})`
+                              }
+                            >
+                              <input
+                                type="checkbox"
+                                className="ios-switch-input"
+                                checked={isGranted}
+                                onChange={() => handleToggleAccountPermission(u, perm.key)}
+                              />
+                              <span className="ios-switch-control">
+                                <span className="ios-switch-track">
+                                  <span className="ios-switch-thumb" />
+                                </span>
+                                <span className="ios-switch-state-text">{isGranted ? 'ON' : 'OFF'}</span>
+                              </span>
+                              {isParentDisabled && (
+                                <span className="cell-parent-disabled-hint">⚠️ Tab Disabled</span>
+                              )}
+                              {hasCustom && !isParentDisabled && (
+                                <span className="custom-override-dot" title="Custom override for this account" />
+                              )}
+                            </label>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
