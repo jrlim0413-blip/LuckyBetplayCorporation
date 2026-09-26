@@ -85,7 +85,7 @@ export async function verifyCredentialsInSupabaseTable(username, password) {
       return {
         success: false,
         inactive: true,
-        error: `Access denied. The account "${account.username}" is currently ${account.status}.`,
+        error: `Access Denied: The account "${account.username}" is currently deactivated. Please contact your system administrator.`,
       }
     }
 

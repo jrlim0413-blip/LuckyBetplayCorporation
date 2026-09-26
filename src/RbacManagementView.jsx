@@ -20,7 +20,7 @@ import {
   deleteRbacUserFromSupabase,
 } from './supabase'
 
-const SQL_SCRIPT_TEXT = `-- Dedicated rbac_users table in Supabase
+const SQL_SCRIPT_TEXT = `-- Dedicated rbac_users table for Cloud Directory
 CREATE TABLE IF NOT EXISTS public.rbac_users (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
@@ -140,6 +140,18 @@ function SvgIcon({ name, size = 16, className = '' }) {
     activity: (
       <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
     ),
+    slashCircle: (
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+      </>
+    ),
+    checkCircle: (
+      <>
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
+      </>
+    ),
   }
 
   return (
@@ -244,8 +256,17 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
         u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (u.branch && u.branch.toLowerCase().includes(searchQuery.toLowerCase()))
-      const matchesRole = filterRole === 'all' || u.role === filterRole
-      return matchesSearch && matchesRole
+
+      let matchesFilter = true
+      if (filterRole === 'active_only') {
+        matchesFilter = u.status === 'active'
+      } else if (filterRole === 'suspended_only') {
+        matchesFilter = u.status === 'suspended' || u.status === 'inactive'
+      } else if (filterRole !== 'all') {
+        matchesFilter = u.role === filterRole
+      }
+
+      return matchesSearch && matchesFilter
     })
   }, [users, searchQuery, filterRole])
 
@@ -369,6 +390,55 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
     showNotification(`Credentials for "${editingUser.username}" saved!`)
   }
 
+  // Handle Deactivate / Activate User Toggle
+  const handleToggleUserStatus = async (targetUser) => {
+    if (!targetUser) return
+    if (targetUser.username === 'admin') {
+      alert('Security policy prevents deactivating the root System Administrator account.')
+      return
+    }
+
+    const nextStatus = targetUser.status === 'suspended' ? 'active' : 'suspended'
+    const isNowDeactivated = nextStatus === 'suspended'
+
+    // 1. Update in local state & cache
+    const updated = users.map((u) => {
+      if (u.id === targetUser.id || u.username.toLowerCase() === targetUser.username.toLowerCase()) {
+        return { ...u, status: nextStatus }
+      }
+      return u
+    })
+    setUsers(updated)
+    saveRbacUsers(updated)
+
+    // 2. Persist update directly to cloud table
+    if (isSupabaseConfigured) {
+      const updatedUser = updated.find(
+        (u) => u.id === targetUser.id || u.username.toLowerCase() === targetUser.username.toLowerCase()
+      )
+      if (updatedUser) {
+        saveRbacUserToSupabase(updatedUser).catch((err) => {
+          console.warn('Failed to update status in cloud database:', err)
+        })
+      }
+    }
+
+    // 3. Security Audit log
+    const updatedLogs = addAuditLog(
+      isNowDeactivated ? 'RBAC_USER_DEACTIVATED' : 'RBAC_USER_ACTIVATED',
+      `Account @${targetUser.username} was ${isNowDeactivated ? 'deactivated' : 'reactivated'} by ${currentUser?.username || 'admin'}`,
+      currentUser?.username || 'admin',
+      isNowDeactivated ? 'warning' : 'success'
+    )
+    setAuditLogs(updatedLogs)
+
+    showNotification(
+      isNowDeactivated
+        ? `Account "@${targetUser.username}" has been deactivated.`
+        : `Account "@${targetUser.username}" has been reactivated.`
+    )
+  }
+
   // Handle Delete User
   const handleDeleteUser = async () => {
     if (!deletingUser || isDeleting) return
@@ -391,11 +461,11 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
       setUsers(updated)
       saveRbacUsers(updated)
 
-      // 3. Delete permanently from Supabase dedicated table
+      // 3. Delete permanently from cloud directory table
       if (isSupabaseConfigured) {
         const delRes = await deleteRbacUserFromSupabase(targetUser.id, targetUser.username)
         if (!delRes.success) {
-          console.warn('Supabase delete warning:', delRes.error)
+          console.warn('Cloud directory delete warning:', delRes.error)
         }
       }
 
@@ -485,15 +555,15 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
               type="button"
               className={`rbac-supabase-sync-btn status-${supabaseSyncStatus}`}
               onClick={() => setShowSqlModal(true)}
-              title="View Supabase table configuration & SQL schema"
+              title="View cloud database configuration & SQL schema"
             >
               <span className={`sync-status-dot status-${supabaseSyncStatus}`} />
               <span>
                 {supabaseSyncStatus === 'connected'
-                  ? 'Supabase Table: Live'
+                  ? 'Cloud Directory: Live'
                   : supabaseSyncStatus === 'table_missing'
-                  ? 'Setup Supabase Table (SQL)'
-                  : 'Supabase Syncing...'}
+                  ? 'Setup Cloud Directory (SQL)'
+                  : 'Cloud Syncing...'}
               </span>
             </button>
           )}
@@ -576,6 +646,8 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
               onChange={(e) => setFilterRole(e.target.value)}
             >
               <option value="all">All Roles ({users.length})</option>
+              <option value="active_only">✅ Active Only</option>
+              <option value="suspended_only">🚫 Deactivated Only</option>
               <option value="admin">Administrators</option>
               <option value="accountant">Head Accountants</option>
               <option value="supervisor">Branch Supervisors</option>
@@ -696,6 +768,17 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                       >
                         <SvgIcon name="edit" size={14} />
                       </button>
+
+                      {user.username !== 'admin' && (
+                        <button
+                          type="button"
+                          className={`rbac-icon-btn ${user.status === 'suspended' ? 'activate-btn' : 'deactivate-btn'}`}
+                          onClick={() => handleToggleUserStatus(user)}
+                          title={user.status === 'suspended' ? 'Reactivate account' : 'Deactivate account'}
+                        >
+                          <SvgIcon name={user.status === 'suspended' ? 'checkCircle' : 'slashCircle'} size={14} />
+                        </button>
+                      )}
 
                       {user.username !== 'admin' && (
                         <button
@@ -1157,7 +1240,7 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
       )}
 
       {/* ===================================================================== */}
-      {/* MODAL: SUPABASE SQL SETUP HELPER                                     */}
+      {/* MODAL: CLOUD DATABASE SQL SETUP HELPER                               */}
       {/* ===================================================================== */}
       {showSqlModal && (
         <div className="rbac-modal-backdrop" onClick={() => setShowSqlModal(false)}>
@@ -1167,8 +1250,8 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                 <SvgIcon name="shieldCheck" size={18} />
               </div>
               <div>
-                <h3>Supabase 'rbac_users' Table Setup</h3>
-                <p>Run this script in your Supabase SQL Editor to activate dedicated cloud logins</p>
+                <h3>Cloud Directory Table Setup</h3>
+                <p>Run this SQL script in your database console to activate dedicated cloud logins</p>
               </div>
             </div>
 
@@ -1176,9 +1259,9 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
               <div className="sql-instruction-step">
                 <strong>How to setup in 1 minute:</strong>
                 <ol>
-                  <li>Open your Supabase Project: <a href="https://supabase.com/dashboard/project/zebtqevwnockipsqifyf/sql" target="_blank" rel="noreferrer">SQL Editor</a>.</li>
+                  <li>Open your Cloud Database Project: <a href="https://supabase.com/dashboard/project/zebtqevwnockipsqifyf/sql" target="_blank" rel="noreferrer">SQL Editor</a>.</li>
                   <li>Click <strong>New Query</strong>, paste the script below, and click <strong>Run</strong>.</li>
-                  <li>Once created, this workstation will automatically authenticate accounts directly from your Supabase table!</li>
+                  <li>Once created, this workstation will automatically authenticate accounts directly from your cloud directory!</li>
                 </ol>
               </div>
               <div className="sql-code-box">

@@ -276,7 +276,15 @@ export function verifyUserCredentials(username, password) {
     return null
   }
 
-  // Strict check: Account MUST exist in directory and password MUST match exactly
+  // Check if account exists but is deactivated
+  const userRecord = users.find((u) => u.username.toLowerCase() === cleanUser)
+  if (userRecord && (userRecord.status === 'suspended' || userRecord.status === 'inactive')) {
+    if (userRecord.password === cleanPass) {
+      return { deactivated: true, username: userRecord.username }
+    }
+  }
+
+  // Strict check: Account MUST exist in directory, be active, and password MUST match exactly
   const match = users.find(
     (u) =>
       u.status === 'active' &&

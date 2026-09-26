@@ -5,7 +5,7 @@ node_modules/
 .env*.local
 .env
 .env.local
-
+supabase-rbac-schema.sql
 # Logs
 *.log
 logs/

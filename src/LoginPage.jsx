@@ -240,7 +240,7 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
             setSubmitting(false)
             return
           } else if (tableResult.inactive) {
-            setErrorMsg(tableResult.error || 'This account is suspended or inactive.')
+            setErrorMsg(tableResult.error || `Access Denied: The account "${cleanUsername}" is currently deactivated. Please contact your system administrator.`)
             setSubmitting(false)
             return
           } else if (tableResult.notFound) {
@@ -249,7 +249,7 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
             return
           }
         } catch (tableErr) {
-          console.warn('Dedicated Supabase table check error, checking RBAC directory:', tableErr)
+          console.warn('Dedicated Cloud table check error, checking RBAC directory:', tableErr)
         }
       }
 
@@ -264,6 +264,11 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
       // 3. Secondary Authentication: RBAC Persistent Directory (Strict Password Matching)
       if (!loginSuccess) {
         const rbacMatch = verifyUserCredentials(cleanUsername, cleanPassword)
+        if (rbacMatch?.deactivated) {
+          setErrorMsg(`Access Denied: The account "${cleanUsername}" is currently deactivated. Please contact your system administrator.`)
+          setSubmitting(false)
+          return
+        }
         if (rbacMatch) {
           loginSuccess = true
           authUser = {
@@ -775,12 +780,12 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
                 <span className="stl-card-welcome-eyebrow">PCSO AUTHORIZED OPERATOR</span>
                 <h2 className="stl-card-heading">Staff Workstation</h2>
                 <p className="stl-card-subheading">
-                  Use assigned RBAC credentials or Supabase Auth to access accounting audits &amp; ledgers.
+                  Use assigned workstation credentials to access authorized accounting audits &amp; ledgers.
                 </p>
                 {isSupabaseConfigured && (
                   <div className="stl-auth-cloud-badge">
                     <span className="cloud-badge-dot" />
-                    <span>Dedicated Supabase Cloud Auth Active</span>
+                    <span>Dedicated Cloud Authentication Active</span>
                   </div>
                 )}
               </div>

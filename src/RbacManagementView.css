@@ -502,6 +502,32 @@
   border-color: #fecaca;
 }
 
+.rbac-icon-btn.deactivate-btn:hover {
+  background: #fff7ed;
+  color: #c2410c;
+  border-color: #fed7aa;
+}
+
+.rbac-icon-btn.activate-btn {
+  color: #16a34a;
+  border-color: #bbf7d0;
+}
+
+.rbac-icon-btn.activate-btn:hover {
+  background: #f0fdf4;
+  color: #15803d;
+  border-color: #86efac;
+}
+
+.rbac-user-card.is-suspended .rbac-user-fullname {
+  text-decoration: line-through;
+  opacity: 0.65;
+}
+
+.rbac-user-card.is-suspended .rbac-user-card-body {
+  opacity: 0.5;
+}
+
 /* Empty State */
 .rbac-empty-state {
   text-align: center;
