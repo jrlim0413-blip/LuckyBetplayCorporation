@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import LoginPage from './LoginPage'
+import RbacManagementView from './RbacManagementView'
 import './App.css'
 
 const tellerApiUrl = import.meta.env.VITE_API_URL
@@ -125,6 +126,7 @@ function Icon({ name, size = 18 }) {
     lock: <><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
     eye: <><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>,
     eyeOff: <><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></>,
+    shieldCheck: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></>,
     logOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></>,
   }
   return <svg className="ui-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
@@ -1500,13 +1502,15 @@ function App() {
           <p className="nav-label">Workspace</p>
           <button className={`nav-item ${activeView === 'overview' ? 'active' : ''}`} type="button" onClick={() => setActiveView('overview')}><span className="nav-icon"><Icon name="overview" /></span> Overview</button>
           <button className={`nav-item ${activeView === 'reports' ? 'active' : ''}`} type="button" onClick={() => setActiveView('reports')}><span className="nav-icon"><Icon name="reports" /></span> Reports</button>
-          <button className="nav-item" type="button"><span className="nav-icon"><Icon name="activity" /></span> Activity</button>
+          <p className="nav-label" style={{ marginTop: '16px' }}>Access Control</p>
+          <button className={`nav-item ${activeView === 'rbac' ? 'active' : ''}`} type="button" onClick={() => setActiveView('rbac')}><span className="nav-icon"><Icon name="shieldCheck" /></span> Users &amp; RBAC</button>
+          <button className={`nav-item ${activeView === 'activity' ? 'active' : ''}`} type="button" onClick={() => setActiveView('activity')}><span className="nav-icon"><Icon name="activity" /></span> Activity Log</button>
         </nav>
         <div className="sidebar-footer">
           <div className="status-dot" />
           <div>
             <strong>{currentUser?.name || 'System connected'}</strong>
-            <span>{currentUser?.role || 'Live API source'}</span>
+            <span>{currentUser?.roleLabel || currentUser?.role || 'Live API source'}</span>
           </div>
         </div>
       </aside>
@@ -1515,9 +1519,17 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">
-              ACCOUNTING / {activeView.toUpperCase()} • <span className="topbar-branch-chip">{branchName} Branch</span>
+              {activeView === 'rbac' || activeView === 'activity' ? 'ADMINISTRATION' : 'ACCOUNTING'} / {activeView.toUpperCase()} • <span className="topbar-branch-chip">{branchName} Branch</span>
             </p>
-            <h1>{activeView === 'reports' ? 'Agent reports' : 'Overall reports'}</h1>
+            <h1>
+              {activeView === 'reports'
+                ? 'Agent reports'
+                : activeView === 'rbac'
+                ? 'User Credentials & Access Control (RBAC)'
+                : activeView === 'activity'
+                ? 'Security & Operational Audit Log'
+                : 'Overall reports'}
+            </h1>
           </div>
           <div className="topbar-actions">
             <span className="date-label">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Connecting...'}</span>
@@ -1544,100 +1556,104 @@ function App() {
         </header>
 
         <section className="content-area">
-          <div className="welcome-row">
-            <div>
-              <h2>Good day, Accountant</h2>
-              <p>
-                {isToday
-                  ? 'Here is the latest live consolidated view for today.'
-                  : `Viewing previous report for ${formatDisplayDate(selectedDate)}.`}
-              </p>
-            </div>
-            {isToday ? (
-              <span className="live-badge"><span /> Live data (Today)</span>
-            ) : (
-              <div className="history-badge-wrap">
-                <span className="history-badge"><Icon name="history" size={14} /> Previous Report</span>
-                <button type="button" className="jump-today-btn" onClick={() => handleDateChange(getCurrentDate())}>Jump to Today</button>
-              </div>
-            )}
-          </div>
-
-          <div className="report-date-bar">
-            <div className="date-bar-left">
-              <div className="date-presets">
-                <button
-                  type="button"
-                  className={`preset-btn ${isToday ? 'active' : ''}`}
-                  onClick={() => handleDateChange(getCurrentDate())}
-                  disabled={loading}
-                >
-                  <span className="preset-dot" /> Today
-                </button>
-                <button
-                  type="button"
-                  className={`preset-btn ${isYesterday ? 'active' : ''}`}
-                  onClick={() => handleDateChange(getYesterdayDate())}
-                  disabled={loading}
-                >
-                  Yesterday
-                </button>
-              </div>
-
-              <div className="date-stepper-wrap">
-                <button
-                  type="button"
-                  className="stepper-btn"
-                  title="Previous day"
-                  onClick={() => handleDateChange(getPreviousDate(selectedDate))}
-                  disabled={loading}
-                >
-                  <Icon name="chevronLeft" size={15} />
-                </button>
-
-                <div className="date-input-group">
-                  <Icon name="calendar" size={14} />
-                  <input
-                    id="report-target-date"
-                    type="date"
-                    value={selectedDate}
-                    max={getCurrentDate()}
-                    onChange={(event) => handleDateChange(event.target.value)}
-                    disabled={loading}
-                  />
+          {(activeView === 'overview' || activeView === 'reports') && (
+            <>
+              <div className="welcome-row">
+                <div>
+                  <h2>Good day, {currentUser?.name?.split(' ')[0] || 'Accountant'}</h2>
+                  <p>
+                    {isToday
+                      ? 'Here is the latest live consolidated view for today.'
+                      : `Viewing previous report for ${formatDisplayDate(selectedDate)}.`}
+                  </p>
                 </div>
-
-                <button
-                  type="button"
-                  className="stepper-btn"
-                  title="Next day"
-                  onClick={() => handleDateChange(getNextDate(selectedDate))}
-                  disabled={loading || isToday}
-                >
-                  <Icon name="chevronRight" size={15} />
-                </button>
-              </div>
-            </div>
-
-            <div className="date-bar-right">
-              <div className="date-info-wrap">
-                <span className="date-display-label">{formatDisplayDate(selectedDate)}</span>
                 {isToday ? (
-                  <span className="date-tag live-tag">Current date</span>
+                  <span className="live-badge"><span /> Live data (Today)</span>
                 ) : (
-                  <span className="date-tag past-tag">Previous report</span>
+                  <div className="history-badge-wrap">
+                    <span className="history-badge"><Icon name="history" size={14} /> Previous Report</span>
+                    <button type="button" className="jump-today-btn" onClick={() => handleDateChange(getCurrentDate())}>Jump to Today</button>
+                  </div>
                 )}
               </div>
-              <button
-                type="button"
-                className="refresh-btn-bar"
-                onClick={() => loadReport(selectedDate)}
-                disabled={loading}
-              >
-                <Icon name="refresh" size={13} /> {loading ? 'Loading...' : 'Refresh'}
-              </button>
-            </div>
-          </div>
+
+              <div className="report-date-bar">
+                <div className="date-bar-left">
+                  <div className="date-presets">
+                    <button
+                      type="button"
+                      className={`preset-btn ${isToday ? 'active' : ''}`}
+                      onClick={() => handleDateChange(getCurrentDate())}
+                      disabled={loading}
+                    >
+                      <span className="preset-dot" /> Today
+                    </button>
+                    <button
+                      type="button"
+                      className={`preset-btn ${isYesterday ? 'active' : ''}`}
+                      onClick={() => handleDateChange(getYesterdayDate())}
+                      disabled={loading}
+                    >
+                      Yesterday
+                    </button>
+                  </div>
+
+                  <div className="date-stepper-wrap">
+                    <button
+                      type="button"
+                      className="stepper-btn"
+                      title="Previous day"
+                      onClick={() => handleDateChange(getPreviousDate(selectedDate))}
+                      disabled={loading}
+                    >
+                      <Icon name="chevronLeft" size={15} />
+                    </button>
+
+                    <div className="date-input-group">
+                      <Icon name="calendar" size={14} />
+                      <input
+                        id="report-target-date"
+                        type="date"
+                        value={selectedDate}
+                        max={getCurrentDate()}
+                        onChange={(event) => handleDateChange(event.target.value)}
+                        disabled={loading}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      className="stepper-btn"
+                      title="Next day"
+                      onClick={() => handleDateChange(getNextDate(selectedDate))}
+                      disabled={loading || isToday}
+                    >
+                      <Icon name="chevronRight" size={15} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="date-bar-right">
+                  <div className="date-info-wrap">
+                    <span className="date-display-label">{formatDisplayDate(selectedDate)}</span>
+                    {isToday ? (
+                      <span className="date-tag live-tag">Current date</span>
+                    ) : (
+                      <span className="date-tag past-tag">Previous report</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="refresh-btn-bar"
+                    onClick={() => loadReport(selectedDate)}
+                    disabled={loading}
+                  >
+                    <Icon name="refresh" size={13} /> {loading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
 
           {activeView === 'overview' && (
             <OverviewDashboard
@@ -1791,6 +1807,17 @@ function App() {
               )}
             </section>)}</div>}
           </section>}
+
+          {(activeView === 'rbac' || activeView === 'activity') && (
+            <RbacManagementView
+              currentUser={currentUser}
+              onSimulateUser={(simUser) => {
+                setCurrentUser(simUser)
+                localStorage.setItem('luckybet_user', JSON.stringify(simUser))
+              }}
+              branchName={branchName}
+            />
+          )}
         </section>
       </main>
 
