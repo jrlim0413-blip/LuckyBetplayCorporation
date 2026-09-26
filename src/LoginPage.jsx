@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { verifyUserCredentials } from './rbac'
+import { verifyUserCredentials, getDeletedUsernames } from './rbac'
 import {
   isSupabaseConfigured,
   verifyCredentialsInSupabaseTable,
   signInWithSupabase,
   signUpWithSupabase,
   formatSupabaseEmail,
-  saveRbacUserToSupabase,
 } from './supabase'
 import './LoginPage.css'
 
@@ -244,13 +243,25 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
             setErrorMsg(tableResult.error || 'This account is suspended or inactive.')
             setSubmitting(false)
             return
+          } else if (tableResult.notFound) {
+            setErrorMsg(`Access Denied: Account "${cleanUsername}" is not registered in the credentials directory.`)
+            setSubmitting(false)
+            return
           }
         } catch (tableErr) {
           console.warn('Dedicated Supabase table check error, checking RBAC directory:', tableErr)
         }
       }
 
-      // 2. Secondary Authentication: RBAC Persistent Directory (Strict Password Matching)
+      // 2. Check if username was permanently deleted
+      const deletedUsernames = getDeletedUsernames()
+      if (deletedUsernames.includes(cleanUsername.toLowerCase())) {
+        setErrorMsg(`Access Denied: Account "${cleanUsername}" has been removed from authorized credentials.`)
+        setSubmitting(false)
+        return
+      }
+
+      // 3. Secondary Authentication: RBAC Persistent Directory (Strict Password Matching)
       if (!loginSuccess) {
         const rbacMatch = verifyUserCredentials(cleanUsername, cleanPassword)
         if (rbacMatch) {
@@ -260,11 +271,6 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
             branch: rbacMatch.branch || branchName,
             token: configuredToken || rbacMatch.token || 'rbac-token-' + rbacMatch.id,
             provider: 'rbac',
-          }
-
-          // Background mirror to Supabase table
-          if (isSupabaseConfigured) {
-            saveRbacUserToSupabase(rbacMatch).catch(() => {})
           }
         }
       }

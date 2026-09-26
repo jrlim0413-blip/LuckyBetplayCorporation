@@ -206,19 +206,32 @@ export async function saveRbacUserToSupabase(user) {
 /**
  * Delete an account from Supabase 'rbac_users' table.
  */
-export async function deleteRbacUserFromSupabase(idOrUsername) {
+export async function deleteRbacUserFromSupabase(id, username) {
   if (!supabase) return { success: false, error: 'Supabase is not configured' }
   try {
-    const { error } = await supabase
-      .from(RBAC_TABLE_NAME)
-      .delete()
-      .or(`id.eq.${idOrUsername},username.eq.${idOrUsername}`)
+    const cleanUser = username ? String(username).trim().toLowerCase() : ''
+    const cleanId = id ? String(id).trim() : ''
+
+    let query = supabase.from(RBAC_TABLE_NAME).delete()
+    if (cleanId && cleanUser) {
+      query = query.or(`id.eq.${cleanId},username.eq.${cleanUser}`)
+    } else if (cleanId) {
+      query = query.eq('id', cleanId)
+    } else if (cleanUser) {
+      query = query.eq('username', cleanUser)
+    } else {
+      return { success: false, error: 'No identifier provided for deletion' }
+    }
+
+    const { error } = await query
 
     if (error) {
+      console.error('Supabase delete error:', error)
       return { success: false, error: error.message }
     }
     return { success: true }
   } catch (err) {
+    console.error('Supabase delete exception:', err)
     return { success: false, error: err.message }
   }
 }

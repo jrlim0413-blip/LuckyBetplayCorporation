@@ -1,7 +1,5 @@
 // src/rbac.js - Role-Based Access Control (RBAC) & Credential Store for Lucky Betplay Corporation
 
-import { saveRbacUserToSupabase } from './supabase.js'
-
 const USERS_STORAGE_KEY = 'luckybet_rbac_users'
 const ROLES_STORAGE_KEY = 'luckybet_rbac_roles'
 const AUDIT_STORAGE_KEY = 'luckybet_rbac_audit_logs'
@@ -169,36 +167,67 @@ export function saveRbacRoles(roles) {
   }
 }
 
+const DELETED_USERS_KEY = 'luckybet_rbac_deleted_users'
+
+export function getDeletedUsernames() {
+  if (!isBrowser) return []
+  try {
+    const raw = localStorage.getItem(DELETED_USERS_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return []
+}
+
+export function recordDeletedUsername(username) {
+  if (!isBrowser || !username) return
+  try {
+    const list = getDeletedUsernames()
+    const clean = username.trim().toLowerCase()
+    if (!list.includes(clean)) {
+      list.push(clean)
+      localStorage.setItem(DELETED_USERS_KEY, JSON.stringify(list))
+    }
+  } catch {}
+}
+
+export function unmarkDeletedUsername(username) {
+  if (!isBrowser || !username) return
+  try {
+    const list = getDeletedUsernames().filter((u) => u !== username.trim().toLowerCase())
+    localStorage.setItem(DELETED_USERS_KEY, JSON.stringify(list))
+  } catch {}
+}
+
 export function getRbacUsers() {
   if (!isBrowser) return DEFAULT_USERS
+  const deleted = getDeletedUsernames()
+
   try {
     const raw = localStorage.getItem(USERS_STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      if (Array.isArray(parsed)) {
+        return parsed.filter((u) => !deleted.includes(u.username.toLowerCase()))
+      }
     }
   } catch (err) {
     console.warn('Failed to parse users from localStorage:', err)
   }
-  // Initialize default users if not set
+
+  // Initialize default users if not set, omitting any deleted ones
+  const initial = DEFAULT_USERS.filter((u) => !deleted.includes(u.username.toLowerCase()))
   try {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(DEFAULT_USERS))
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(initial))
   } catch {}
-  return DEFAULT_USERS
+  return initial
 }
 
 export function saveRbacUsers(users) {
+  if (!isBrowser) return
   try {
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users))
   } catch (err) {
     console.error('Failed to save users to localStorage:', err)
-  }
-
-  // Background mirror sync to Supabase dedicated table
-  if (Array.isArray(users)) {
-    users.forEach((u) => {
-      saveRbacUserToSupabase(u).catch(() => {})
-    })
   }
 }
 
@@ -241,6 +270,11 @@ export function verifyUserCredentials(username, password) {
   const users = getRbacUsers()
   const cleanUser = String(username || '').trim().toLowerCase()
   const cleanPass = String(password || '').trim()
+
+  const deleted = getDeletedUsernames()
+  if (deleted.includes(cleanUser)) {
+    return null
+  }
 
   // Strict check: Account MUST exist in directory and password MUST match exactly
   const match = users.find(

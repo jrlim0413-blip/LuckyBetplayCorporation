@@ -9,6 +9,9 @@ import {
   DEFAULT_ROLES,
   getAuditLogs,
   addAuditLog,
+  getDeletedUsernames,
+  recordDeletedUsername,
+  unmarkDeletedUsername,
 } from './rbac'
 import {
   isSupabaseConfigured,
@@ -171,6 +174,7 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [deletingUser, setDeletingUser] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [feedbackNotice, setFeedbackNotice] = useState('')
   const [supabaseSyncStatus, setSupabaseSyncStatus] = useState('idle') // 'idle' | 'syncing' | 'connected' | 'table_missing' | 'error'
   const [showSqlModal, setShowSqlModal] = useState(false)
@@ -182,16 +186,32 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
     setSupabaseSyncStatus('syncing')
     getSupabaseRbacUsers()
       .then((res) => {
+        const deletedList = getDeletedUsernames()
         if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          setUsers(res.data)
-          saveRbacUsers(res.data)
+          // Filter out any user that was previously marked as deleted
+          const validUsers = res.data.filter(
+            (u) => !deletedList.includes(u.username?.toLowerCase())
+          )
+          setUsers(validUsers)
+          saveRbacUsers(validUsers)
           setSupabaseSyncStatus('connected')
+
+          // Background cleanup of any lingering deleted accounts still in Supabase
+          const lingering = res.data.filter((u) =>
+            deletedList.includes(u.username?.toLowerCase())
+          )
+          lingering.forEach((u) => {
+            deleteRbacUserFromSupabase(u.id, u.username).catch(() => {})
+          })
         } else if (res.tableMissing) {
           setSupabaseSyncStatus('table_missing')
         } else if (res.success && res.data.length === 0) {
           setSupabaseSyncStatus('connected')
-          // Auto-seed default users into the empty table
-          users.forEach((u) => saveRbacUserToSupabase(u).catch(() => {}))
+          // Auto-seed default users only if not in deleted list
+          const activeDefaults = users.filter(
+            (u) => !deletedList.includes(u.username?.toLowerCase())
+          )
+          activeDefaults.forEach((u) => saveRbacUserToSupabase(u).catch(() => {}))
         } else {
           setSupabaseSyncStatus('connected')
         }
@@ -272,6 +292,9 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
       email: formData.email.trim() || `${cleanUser}@luckybetplay.ph`,
     }
 
+    // Unmark in case this username was previously deleted
+    unmarkDeletedUsername(cleanUser)
+
     const updated = [newUser, ...users]
     setUsers(updated)
     saveRbacUsers(updated)
@@ -347,32 +370,52 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
   }
 
   // Handle Delete User
-  const handleDeleteUser = () => {
-    if (!deletingUser) return
+  const handleDeleteUser = async () => {
+    if (!deletingUser || isDeleting) return
     if (deletingUser.username === 'admin') {
       alert('Security policy prevents deleting the root System Administrator account.')
       setDeletingUser(null)
       return
     }
 
-    const updated = users.filter((u) => u.id !== deletingUser.id)
-    setUsers(updated)
-    saveRbacUsers(updated)
+    const targetUser = deletingUser
+    const cleanUser = targetUser.username.trim().toLowerCase()
+    setIsDeleting(true)
 
-    if (isSupabaseConfigured) {
-      deleteRbacUserFromSupabase(deletingUser.id).catch(() => {})
+    try {
+      // 1. Immediately blacklist in persistent deleted list so localStorage never resurrects it
+      recordDeletedUsername(cleanUser)
+
+      // 2. Remove from active state and local cache
+      const updated = users.filter((u) => u.id !== targetUser.id && u.username.toLowerCase() !== cleanUser)
+      setUsers(updated)
+      saveRbacUsers(updated)
+
+      // 3. Delete permanently from Supabase dedicated table
+      if (isSupabaseConfigured) {
+        const delRes = await deleteRbacUserFromSupabase(targetUser.id, targetUser.username)
+        if (!delRes.success) {
+          console.warn('Supabase delete warning:', delRes.error)
+        }
+      }
+
+      // 4. Audit log
+      const updatedLogs = addAuditLog(
+        'RBAC_USER_DELETED',
+        `Account ${cleanUser} was permanently deleted by ${currentUser?.username || 'admin'}`,
+        currentUser?.username || 'admin',
+        'warning'
+      )
+      setAuditLogs(updatedLogs)
+
+      showNotification(`User credential "@${cleanUser}" permanently deleted.`)
+    } catch (err) {
+      console.error('Error deleting user:', err)
+      showNotification(`Error deleting user: ${err.message}`)
+    } finally {
+      setIsDeleting(false)
+      setDeletingUser(null)
     }
-
-    const updatedLogs = addAuditLog(
-      'RBAC_USER_DELETED',
-      `Account ${deletingUser.username} was permanently deleted by ${currentUser?.username || 'admin'}`,
-      currentUser?.username || 'admin',
-      'warning'
-    )
-    setAuditLogs(updatedLogs)
-
-    setDeletingUser(null)
-    showNotification(`User "${deletingUser.username}" has been removed.`)
   }
 
   // Toggle permission in the matrix
@@ -1096,6 +1139,7 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                 type="button"
                 className="rbac-secondary-btn"
                 onClick={() => setDeletingUser(null)}
+                disabled={isDeleting}
               >
                 Keep Account
               </button>
@@ -1103,8 +1147,9 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                 type="button"
                 className="rbac-danger-btn"
                 onClick={handleDeleteUser}
+                disabled={isDeleting}
               >
-                Revoke &amp; Delete
+                {isDeleting ? 'Deleting...' : 'Revoke & Delete'}
               </button>
             </div>
           </div>
