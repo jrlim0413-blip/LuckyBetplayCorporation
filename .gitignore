@@ -4,6 +4,7 @@ node_modules/
 # Environment variables (keep secrets safe)
 .env*.local
 .env
+.env.local
 
 # Logs
 *.log
@@ -14,4 +15,3 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
-.env.local

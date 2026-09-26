@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import LoginPage from './LoginPage'
 import RbacManagementView from './RbacManagementView'
+import { signOutFromSupabase } from './supabase'
 import './App.css'
 
 const tellerApiUrl = import.meta.env.VITE_API_URL
@@ -1352,6 +1353,7 @@ function App() {
   })
 
   const handleLogout = () => {
+    signOutFromSupabase().catch(() => {})
     localStorage.removeItem('luckybet_user')
     localStorage.removeItem('luckybet_token')
     sessionStorage.removeItem('luckybet_user')

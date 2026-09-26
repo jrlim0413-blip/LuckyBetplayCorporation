@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { verifyUserCredentials } from './rbac'
+import {
+  isSupabaseConfigured,
+  signInWithSupabase,
+  signUpWithSupabase,
+  formatSupabaseEmail,
+} from './supabase'
 import './LoginPage.css'
 
 
@@ -209,14 +215,63 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
     const configuredToken = import.meta.env.VITE_AUTHORIZATION
 
     try {
-      // 1. Check local RBAC persistent credential store
-      const rbacMatch = verifyUserCredentials(cleanUsername, cleanPassword)
-      if (rbacMatch) {
-        loginSuccess = true
-        authUser = {
-          ...rbacMatch,
-          branch: rbacMatch.branch || branchName,
-          token: configuredToken || rbacMatch.token || 'rbac-token-' + rbacMatch.id,
+      // 1. Try Dedicated Supabase Cloud Authentication
+      if (isSupabaseConfigured) {
+        try {
+          const supabaseResult = await signInWithSupabase(cleanUsername, cleanPassword)
+          if (supabaseResult.success && supabaseResult.user) {
+            const userMeta = supabaseResult.user.user_metadata || {}
+            const isAdmin =
+              cleanUsername.toLowerCase().includes('admin') ||
+              userMeta.role === 'admin' ||
+              supabaseResult.user.email?.toLowerCase().includes('admin')
+
+            loginSuccess = true
+            authUser = {
+              id: supabaseResult.user.id,
+              username: cleanUsername,
+              email: supabaseResult.user.email,
+              name: userMeta.name || (isAdmin ? 'System Administrator' : 'Head Accounting Officer'),
+              role: userMeta.role || (isAdmin ? 'admin' : 'accountant'),
+              roleLabel:
+                userMeta.roleLabel ||
+                (isAdmin ? 'System Administrator' : 'Accounting & Remittance Officer'),
+              branch: userMeta.branch || branchName,
+              token:
+                configuredToken ||
+                supabaseResult.session?.access_token ||
+                'supabase-token-' + supabaseResult.user.id,
+              provider: 'supabase',
+              loginTime: new Date().toISOString(),
+            }
+          }
+        } catch (supabaseErr) {
+          console.warn('Supabase authentication check failed, evaluating fallback:', supabaseErr)
+        }
+      }
+
+      // 2. Check local RBAC persistent credential store
+      if (!loginSuccess) {
+        const rbacMatch = verifyUserCredentials(cleanUsername, cleanPassword)
+        if (rbacMatch) {
+          loginSuccess = true
+          authUser = {
+            ...rbacMatch,
+            branch: rbacMatch.branch || branchName,
+            token: configuredToken || rbacMatch.token || 'rbac-token-' + rbacMatch.id,
+            provider: 'rbac',
+          }
+
+          // Background auto-sync to Supabase Auth so staff account is mirrored on Supabase Cloud
+          if (isSupabaseConfigured) {
+            const email = formatSupabaseEmail(cleanUsername)
+            signUpWithSupabase(email, cleanPassword, {
+              name: authUser.name,
+              role: authUser.role,
+              roleLabel: authUser.roleLabel,
+              branch: authUser.branch,
+            }).catch(() => {})
+          }
         }
       }
 
@@ -745,8 +800,14 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
                 <span className="stl-card-welcome-eyebrow">PCSO AUTHORIZED OPERATOR</span>
                 <h2 className="stl-card-heading">Staff Workstation</h2>
                 <p className="stl-card-subheading">
-                  Use assigned RBAC credentials to access accounting audits &amp; ledgers.
+                  Use assigned RBAC credentials or Supabase Auth to access accounting audits &amp; ledgers.
                 </p>
+                {isSupabaseConfigured && (
+                  <div className="stl-auth-cloud-badge">
+                    <span className="cloud-badge-dot" />
+                    <span>Dedicated Supabase Cloud Auth Active</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -765,7 +826,7 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
               {/* Username Input */}
               <div className="stl-form-group">
                 <label className="stl-form-label" htmlFor="stl-username-input">
-                  Username or Access ID
+                  Username, Email or Access ID
                 </label>
                 <div className="stl-input-box">
                   <span className="stl-input-lead-icon">
@@ -777,7 +838,7 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
                     className="stl-text-input"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="e.g. mandaue.staff"
+                    placeholder="e.g. mandaue.staff or your email"
                     autoComplete="username"
                     required
                   />

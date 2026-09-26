@@ -2088,6 +2088,35 @@
   line-height: 1.45;
 }
 
+.stl-auth-cloud-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 3px 9px;
+  border-radius: 12px;
+  margin-top: 8px;
+  letter-spacing: 0.3px;
+}
+
+.cloud-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: pulseCloudDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseCloudDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
+}
+
 /* RBAC Role Quick Presets Selector */
 .stl-role-presets-container {
   margin-top: 14px;
