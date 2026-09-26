@@ -1367,7 +1367,8 @@ function App() {
     setError('')
 
     try {
-      const effectiveToken = currentUser?.token || authorization
+      const isDummyToken = (t) => !t || t.startsWith('rbac-token') || t.startsWith('local-auth')
+      const effectiveToken = (!isDummyToken(currentUser?.token) ? currentUser?.token : null) || authorization || currentUser?.token
       const headers = effectiveToken
         ? { Authorization: `Bearer ${effectiveToken}`, Accept: 'application/json' }
         : { Accept: 'application/json' }

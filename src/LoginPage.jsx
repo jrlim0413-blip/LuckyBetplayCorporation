@@ -204,11 +204,11 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
     }
 
     setSubmitting(true)
+    let loginSuccess = false
+    let authUser = null
+    const configuredToken = import.meta.env.VITE_AUTHORIZATION
 
     try {
-      let loginSuccess = false
-      let authUser = null
-
       // 1. Check local RBAC persistent credential store
       const rbacMatch = verifyUserCredentials(cleanUsername, cleanPassword)
       if (rbacMatch) {
@@ -216,7 +216,7 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
         authUser = {
           ...rbacMatch,
           branch: rbacMatch.branch || branchName,
-          token: rbacMatch.token || 'rbac-token-' + rbacMatch.id,
+          token: configuredToken || rbacMatch.token || 'rbac-token-' + rbacMatch.id,
         }
       }
 
