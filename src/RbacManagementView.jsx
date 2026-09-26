@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import './RbacManagementView.css'
 import {
   getRbacUsers,
@@ -10,6 +10,51 @@ import {
   getAuditLogs,
   addAuditLog,
 } from './rbac'
+import {
+  isSupabaseConfigured,
+  getSupabaseRbacUsers,
+  saveRbacUserToSupabase,
+  deleteRbacUserFromSupabase,
+} from './supabase'
+
+const SQL_SCRIPT_TEXT = `-- Dedicated rbac_users table in Supabase
+CREATE TABLE IF NOT EXISTS public.rbac_users (
+  id TEXT PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'staff',
+  role_label TEXT,
+  branch TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  avatar TEXT,
+  email TEXT,
+  last_login TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.rbac_users ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow anon full access to rbac_users" ON public.rbac_users;
+CREATE POLICY "Allow anon full access to rbac_users"
+ON public.rbac_users
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+INSERT INTO public.rbac_users (id, username, password, name, role, role_label, branch, status, avatar, email)
+VALUES
+  ('usr_admin', 'admin', 'adminpassword', 'Jay Ryan Lim', 'admin', 'System Administrator', 'Mandaue HQ (All Zones)', 'active', 'JL', 'admin@luckybetplay.ph'),
+  ('usr_accountant', 'mandaue.staff', 'luckybet2026', 'Elena Morales', 'accountant', 'Head Accountant', 'Mandaue Branch', 'active', 'EM', 'elena.m@luckybetplay.ph'),
+  ('usr_supervisor', 'supervisor.carlos', 'luckybet2026', 'Carlos Tan', 'supervisor', 'Branch Supervisor', 'Mandaue Central Zone', 'active', 'CT', 'carlos.tan@luckybetplay.ph'),
+  ('usr_terminal', 'teller.mandaue', 'luckybet2026', 'Rico Dela Cruz', 'staff', 'Terminal Staff', 'Mandaue Terminal 01', 'active', 'RD', 'rico.staff@luckybetplay.ph')
+ON CONFLICT (username) DO UPDATE SET
+  password = EXCLUDED.password,
+  name = EXCLUDED.name,
+  role = EXCLUDED.role,
+  role_label = EXCLUDED.role_label,
+  branch = EXCLUDED.branch,
+  status = EXCLUDED.status;`
 
 function SvgIcon({ name, size = 16, className = '' }) {
   const icons = {
@@ -127,6 +172,34 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
   const [editingUser, setEditingUser] = useState(null)
   const [deletingUser, setDeletingUser] = useState(null)
   const [feedbackNotice, setFeedbackNotice] = useState('')
+  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState('idle') // 'idle' | 'syncing' | 'connected' | 'table_missing' | 'error'
+  const [showSqlModal, setShowSqlModal] = useState(false)
+
+  // Fetch users from Supabase table on mount
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+
+    setSupabaseSyncStatus('syncing')
+    getSupabaseRbacUsers()
+      .then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setUsers(res.data)
+          saveRbacUsers(res.data)
+          setSupabaseSyncStatus('connected')
+        } else if (res.tableMissing) {
+          setSupabaseSyncStatus('table_missing')
+        } else if (res.success && res.data.length === 0) {
+          setSupabaseSyncStatus('connected')
+          // Auto-seed default users into the empty table
+          users.forEach((u) => saveRbacUserToSupabase(u).catch(() => {}))
+        } else {
+          setSupabaseSyncStatus('connected')
+        }
+      })
+      .catch(() => {
+        setSupabaseSyncStatus('error')
+      })
+  }, [])
 
   // New User Form State
   const [formData, setFormData] = useState({
@@ -203,6 +276,11 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
     setUsers(updated)
     saveRbacUsers(updated)
 
+    // Save directly to Supabase dedicated table
+    if (isSupabaseConfigured) {
+      saveRbacUserToSupabase(newUser).catch(() => {})
+    }
+
     // Audit log
     const updatedLogs = addAuditLog(
       'RBAC_USER_CREATED',
@@ -251,6 +329,11 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
     setUsers(updated)
     saveRbacUsers(updated)
 
+    const updatedUser = updated.find((u) => u.id === editingUser.id)
+    if (updatedUser && isSupabaseConfigured) {
+      saveRbacUserToSupabase(updatedUser).catch(() => {})
+    }
+
     const updatedLogs = addAuditLog(
       'RBAC_USER_UPDATED',
       `Credential for ${editingUser.username} updated to ${roleDef.label} (${editingUser.status})`,
@@ -275,6 +358,10 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
     const updated = users.filter((u) => u.id !== deletingUser.id)
     setUsers(updated)
     saveRbacUsers(updated)
+
+    if (isSupabaseConfigured) {
+      deleteRbacUserFromSupabase(deletingUser.id).catch(() => {})
+    }
 
     const updatedLogs = addAuditLog(
       'RBAC_USER_DELETED',
@@ -350,6 +437,24 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
         </div>
 
         <div className="rbac-header-actions">
+          {isSupabaseConfigured && (
+            <button
+              type="button"
+              className={`rbac-supabase-sync-btn status-${supabaseSyncStatus}`}
+              onClick={() => setShowSqlModal(true)}
+              title="View Supabase table configuration & SQL schema"
+            >
+              <span className={`sync-status-dot status-${supabaseSyncStatus}`} />
+              <span>
+                {supabaseSyncStatus === 'connected'
+                  ? 'Supabase Table: Live'
+                  : supabaseSyncStatus === 'table_missing'
+                  ? 'Setup Supabase Table (SQL)'
+                  : 'Supabase Syncing...'}
+              </span>
+            </button>
+          )}
+
           <button
             type="button"
             className="rbac-primary-btn"
@@ -1000,6 +1105,60 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                 onClick={handleDeleteUser}
               >
                 Revoke &amp; Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL: SUPABASE SQL SETUP HELPER                                     */}
+      {/* ===================================================================== */}
+      {showSqlModal && (
+        <div className="rbac-modal-backdrop" onClick={() => setShowSqlModal(false)}>
+          <div className="rbac-modal-window modal-sql-setup" onClick={(e) => e.stopPropagation()}>
+            <div className="rbac-modal-header">
+              <div className="rbac-modal-icon-badge info">
+                <SvgIcon name="shieldCheck" size={18} />
+              </div>
+              <div>
+                <h3>Supabase 'rbac_users' Table Setup</h3>
+                <p>Run this script in your Supabase SQL Editor to activate dedicated cloud logins</p>
+              </div>
+            </div>
+
+            <div className="rbac-sql-modal-body">
+              <div className="sql-instruction-step">
+                <strong>How to setup in 1 minute:</strong>
+                <ol>
+                  <li>Open your Supabase Project: <a href="https://supabase.com/dashboard/project/zebtqevwnockipsqifyf/sql" target="_blank" rel="noreferrer">SQL Editor</a>.</li>
+                  <li>Click <strong>New Query</strong>, paste the script below, and click <strong>Run</strong>.</li>
+                  <li>Once created, this workstation will automatically authenticate accounts directly from your Supabase table!</li>
+                </ol>
+              </div>
+              <div className="sql-code-box">
+                <pre>{SQL_SCRIPT_TEXT}</pre>
+              </div>
+            </div>
+
+            <div className="rbac-modal-footer">
+              <button
+                type="button"
+                className="rbac-secondary-btn"
+                onClick={() => setShowSqlModal(false)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="rbac-primary-btn"
+                onClick={() => {
+                  navigator.clipboard.writeText(SQL_SCRIPT_TEXT)
+                  showNotification('SQL Script copied to clipboard!')
+                }}
+              >
+                <SvgIcon name="check" size={14} />
+                Copy SQL Script
               </button>
             </div>
           </div>

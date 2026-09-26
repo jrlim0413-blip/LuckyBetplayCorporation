@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { verifyUserCredentials } from './rbac'
 import {
   isSupabaseConfigured,
+  verifyCredentialsInSupabaseTable,
   signInWithSupabase,
   signUpWithSupabase,
   formatSupabaseEmail,
+  saveRbacUserToSupabase,
 } from './supabase'
 import './LoginPage.css'
 
@@ -215,42 +217,40 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
     const configuredToken = import.meta.env.VITE_AUTHORIZATION
 
     try {
-      // 1. Try Dedicated Supabase Cloud Authentication
+      // 1. Primary Authentication: Dedicated Supabase 'rbac_users' Table
       if (isSupabaseConfigured) {
         try {
-          const supabaseResult = await signInWithSupabase(cleanUsername, cleanPassword)
-          if (supabaseResult.success && supabaseResult.user) {
-            const userMeta = supabaseResult.user.user_metadata || {}
-            const isAdmin =
-              cleanUsername.toLowerCase().includes('admin') ||
-              userMeta.role === 'admin' ||
-              supabaseResult.user.email?.toLowerCase().includes('admin')
-
+          const tableResult = await verifyCredentialsInSupabaseTable(cleanUsername, cleanPassword)
+          if (tableResult.success && tableResult.account) {
+            const acc = tableResult.account
+            const isAdmin = acc.role === 'admin' || cleanUsername.toLowerCase().includes('admin')
             loginSuccess = true
             authUser = {
-              id: supabaseResult.user.id,
-              username: cleanUsername,
-              email: supabaseResult.user.email,
-              name: userMeta.name || (isAdmin ? 'System Administrator' : 'Head Accounting Officer'),
-              role: userMeta.role || (isAdmin ? 'admin' : 'accountant'),
-              roleLabel:
-                userMeta.roleLabel ||
-                (isAdmin ? 'System Administrator' : 'Accounting & Remittance Officer'),
-              branch: userMeta.branch || branchName,
-              token:
-                configuredToken ||
-                supabaseResult.session?.access_token ||
-                'supabase-token-' + supabaseResult.user.id,
-              provider: 'supabase',
+              id: acc.id,
+              username: acc.username,
+              name: acc.name,
+              role: acc.role,
+              roleLabel: acc.roleLabel || (isAdmin ? 'System Administrator' : 'Head Accounting Officer'),
+              branch: acc.branch || branchName,
+              token: configuredToken || 'rbac-token-' + acc.id,
+              provider: 'supabase_table',
               loginTime: new Date().toISOString(),
             }
+          } else if (tableResult.wrongPassword) {
+            setErrorMsg('Invalid password. Please check your credentials and try again.')
+            setSubmitting(false)
+            return
+          } else if (tableResult.inactive) {
+            setErrorMsg(tableResult.error || 'This account is suspended or inactive.')
+            setSubmitting(false)
+            return
           }
-        } catch (supabaseErr) {
-          console.warn('Supabase authentication check failed, evaluating fallback:', supabaseErr)
+        } catch (tableErr) {
+          console.warn('Dedicated Supabase table check error, checking RBAC directory:', tableErr)
         }
       }
 
-      // 2. Check local RBAC persistent credential store
+      // 2. Secondary Authentication: RBAC Persistent Directory (Strict Password Matching)
       if (!loginSuccess) {
         const rbacMatch = verifyUserCredentials(cleanUsername, cleanPassword)
         if (rbacMatch) {
@@ -262,20 +262,14 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
             provider: 'rbac',
           }
 
-          // Background auto-sync to Supabase Auth so staff account is mirrored on Supabase Cloud
+          // Background mirror to Supabase table
           if (isSupabaseConfigured) {
-            const email = formatSupabaseEmail(cleanUsername)
-            signUpWithSupabase(email, cleanPassword, {
-              name: authUser.name,
-              role: authUser.role,
-              roleLabel: authUser.roleLabel,
-              branch: authUser.branch,
-            }).catch(() => {})
+            saveRbacUserToSupabase(rbacMatch).catch(() => {})
           }
         }
       }
 
-      // 2. Attempt official remote backend API if reachable
+      // 3. Fallback: Optional remote backend accounting API (if deployed)
       if (!loginSuccess) {
         try {
           const loginUrl = new URL('https://stl-mandaue-api.com/api/accountant/login')
@@ -302,44 +296,19 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
                 roleLabel: 'Head Accounting Officer',
                 branch: branchName,
                 token: data.data.token,
+                provider: 'api',
                 loginTime: new Date().toISOString(),
               }
             }
           }
         } catch (apiErr) {
-          console.warn('API endpoint unreachable, checking offline authentication:', apiErr)
+          // Ignore
         }
       }
 
-      // 3. Fallback for test/offline evaluations
+      // STRICT: Kung wala sa RBAC directory o table, hindi makakapag-login!
       if (!loginSuccess) {
-        const validLocalUsers = [
-          'mandaue.staff',
-          'mandaue',
-          'accountant',
-          'admin',
-          'user',
-          'supervisor',
-          'luckybet',
-          'staff',
-        ]
-        const isDefaultUser =
-          validLocalUsers.includes(cleanUsername.toLowerCase()) || cleanUsername.length >= 3
-        const isDefaultPass = cleanPassword.length >= 4
-
-        if (isDefaultUser && isDefaultPass) {
-          const isAdmin = cleanUsername.toLowerCase().includes('admin')
-          loginSuccess = true
-          authUser = {
-            username: cleanUsername,
-            name: isAdmin ? 'System Administrator' : 'Head Accounting Officer',
-            role: isAdmin ? 'admin' : 'accountant',
-            roleLabel: isAdmin ? 'System Administrator' : 'Accounting & Remittance Officer',
-            branch: branchName,
-            token: import.meta.env.VITE_AUTHORIZATION || 'local-auth-token',
-            loginTime: new Date().toISOString(),
-          }
-        }
+        setErrorMsg('Access Denied: Account not found or incorrect password. Only accounts configured in RBAC can log in.')
       }
 
       if (loginSuccess && authUser) {

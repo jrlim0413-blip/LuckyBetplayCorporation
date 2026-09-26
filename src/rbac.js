@@ -1,5 +1,7 @@
 // src/rbac.js - Role-Based Access Control (RBAC) & Credential Store for Lucky Betplay Corporation
 
+import { saveRbacUserToSupabase } from './supabase.js'
+
 const USERS_STORAGE_KEY = 'luckybet_rbac_users'
 const ROLES_STORAGE_KEY = 'luckybet_rbac_roles'
 const AUDIT_STORAGE_KEY = 'luckybet_rbac_audit_logs'
@@ -145,7 +147,10 @@ export const DEFAULT_AUDIT_LOGS = [
 // -----------------------------------------------------------------------------
 // Storage Accessors
 // -----------------------------------------------------------------------------
+const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined'
+
 export function getRbacRoles() {
+  if (!isBrowser) return DEFAULT_ROLES
   try {
     const raw = localStorage.getItem(ROLES_STORAGE_KEY)
     if (raw) return JSON.parse(raw)
@@ -156,6 +161,7 @@ export function getRbacRoles() {
 }
 
 export function saveRbacRoles(roles) {
+  if (!isBrowser) return
   try {
     localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles))
   } catch (err) {
@@ -164,6 +170,7 @@ export function saveRbacRoles(roles) {
 }
 
 export function getRbacUsers() {
+  if (!isBrowser) return DEFAULT_USERS
   try {
     const raw = localStorage.getItem(USERS_STORAGE_KEY)
     if (raw) {
@@ -185,6 +192,13 @@ export function saveRbacUsers(users) {
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users))
   } catch (err) {
     console.error('Failed to save users to localStorage:', err)
+  }
+
+  // Background mirror sync to Supabase dedicated table
+  if (Array.isArray(users)) {
+    users.forEach((u) => {
+      saveRbacUserToSupabase(u).catch(() => {})
+    })
   }
 }
 
@@ -221,18 +235,19 @@ export function addAuditLog(action, details, actor = 'current_user', severity = 
 }
 
 // -----------------------------------------------------------------------------
-// Authentication & RBAC Verification
+// Authentication & RBAC Verification (Strict Directory Matching)
 // -----------------------------------------------------------------------------
 export function verifyUserCredentials(username, password) {
   const users = getRbacUsers()
   const cleanUser = String(username || '').trim().toLowerCase()
   const cleanPass = String(password || '').trim()
 
+  // Strict check: Account MUST exist in directory and password MUST match exactly
   const match = users.find(
     (u) =>
-      u.status !== 'suspended' &&
-      (u.username.toLowerCase() === cleanUser || (cleanUser === 'admin' && u.role === 'admin')) &&
-      (u.password === cleanPass || cleanPass === 'luckybet2026' || cleanPass === 'admin')
+      u.status === 'active' &&
+      u.username.toLowerCase() === cleanUser &&
+      u.password === cleanPass
   )
 
   if (match) {

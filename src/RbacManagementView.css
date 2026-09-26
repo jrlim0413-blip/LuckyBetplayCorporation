@@ -981,3 +981,117 @@
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* Supabase Table Sync Status & SQL Modal */
+.rbac-supabase-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid #dce3ee;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.rbac-supabase-sync-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.rbac-supabase-sync-btn.status-connected {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.rbac-supabase-sync-btn.status-table_missing {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.sync-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.sync-status-dot.status-connected {
+  background: #16a34a;
+  box-shadow: 0 0 6px #16a34a;
+}
+
+.sync-status-dot.status-table_missing {
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+}
+
+.sync-status-dot.status-syncing {
+  background: #3b82f6;
+  box-shadow: 0 0 6px #3b82f6;
+  animation: pulseDot 1.4s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+
+.rbac-modal-window.modal-sql-setup {
+  max-width: 680px;
+}
+
+.rbac-sql-modal-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sql-instruction-step {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.sql-instruction-step ol {
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+
+.sql-instruction-step li {
+  margin-bottom: 4px;
+}
+
+.sql-instruction-step a {
+  color: #2563eb;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.sql-code-box {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 12px 14px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #1e293b;
+}
+
+.sql-code-box pre {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #38bdf8;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
