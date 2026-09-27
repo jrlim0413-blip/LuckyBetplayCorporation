@@ -76,7 +76,7 @@ WITH CHECK (true);
 INSERT INTO public.rbac_users (id, username, password, name, role, role_label, branch, status, avatar, email)
 VALUES
   ('usr_admin', 'admin', 'adminpassword', 'Jay Ryan Lim', 'admin', 'System Administrator', 'Mandaue HQ (All Zones)', 'active', 'JL', 'admin@luckybetplay.ph'),
-  ('usr_accountant', 'mandaue.staff', 'luckybet2026', 'Elena Morales', 'accountant', 'Head Accountant', 'Mandaue Branch', 'active', 'EM', 'elena.m@luckybetplay.ph'),
+  ('usr_accountant', 'mandaue.staff', 'luckybet2026', 'Elena Morales', 'accountant', 'Head Cashier', 'Mandaue Branch', 'active', 'EM', 'elena.m@luckybetplay.ph'),
   ('usr_supervisor', 'supervisor.carlos', 'luckybet2026', 'Carlos Tan', 'supervisor', 'Branch Supervisor', 'Mandaue Central Zone', 'active', 'CT', 'carlos.tan@luckybetplay.ph'),
   ('usr_terminal', 'teller.mandaue', 'luckybet2026', 'Rico Dela Cruz', 'staff', 'Terminal Staff', 'Mandaue Terminal 01', 'active', 'RD', 'rico.staff@luckybetplay.ph')
 ON CONFLICT (username) DO UPDATE SET
@@ -1074,7 +1074,7 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
               <option value="active_only">✅ Active Only</option>
               <option value="suspended_only">🚫 Deactivated Only</option>
               <option value="admin">Administrators</option>
-              <option value="accountant">Head Accountants</option>
+              <option value="accountant">Head Cashiers</option>
               <option value="supervisor">Branch Supervisors</option>
               <option value="staff">Terminal Staff</option>
             </select>
@@ -1810,7 +1810,7 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   >
-                    <option value="accountant">Head Accountant</option>
+                    <option value="accountant">Head Cashier</option>
                     <option value="supervisor">Branch Supervisor</option>
                     <option value="staff">Terminal Staff</option>
                     <option value="admin">System Administrator</option>
@@ -1926,7 +1926,7 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                     disabled={editingUser.username === 'admin'}
                     onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
                   >
-                    <option value="accountant">Head Accountant</option>
+                    <option value="accountant">Head Cashier</option>
                     <option value="supervisor">Branch Supervisor</option>
                     <option value="staff">Terminal Staff</option>
                     <option value="admin">System Administrator</option>
