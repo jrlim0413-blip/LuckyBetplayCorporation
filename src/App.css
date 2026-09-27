@@ -671,25 +671,27 @@ button { font: inherit; }
   background: #ffffff;
   color: #0f172a;
   font-family: 'DM Sans', sans-serif;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .statement-sheet-inline {
-  padding: 20px 24px 28px;
+  padding: 6px 8px 12px;
   border-top: 1px solid #e2e8f0;
 }
 
 .statement-sheet-modal {
-  padding: 28px 36px 36px;
+  padding: 6px 8px 10px;
   width: 100%;
-  max-width: 900px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
 }
 
 /* Document Header (Picture 1 style) */
 .statement-header-block {
   text-align: center;
-  margin-bottom: 22px;
-  padding-bottom: 14px;
+  margin-bottom: 8px;
+  padding-bottom: 5px;
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -1528,76 +1530,131 @@ button { font: inherit; }
   justify-content: space-between;
   min-height: 275mm;
   box-sizing: border-box;
+  padding: 4px 6px !important;
+  margin: 0 !important;
 }
 
 .statement-sheet.a4-single-page-fit {
-  padding: 18px 24px !important;
+  padding: 4px 6px !important;
 }
 
 .statement-sheet.a4-single-page-fit .statement-header-block {
-  margin-bottom: 12px;
-  padding-bottom: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
 }
 
-.statement-sheet.a4-single-page-fit .statement-td {
-  padding: 4.5px 8px;
-  font-size: 11.5px;
+.statement-sheet .statement-balance-table {
+  font-size: 12px !important;
+  line-height: 1.35;
 }
 
-.statement-sheet.a4-single-page-fit .statement-th {
-  padding: 5px 8px;
-  font-size: 10.5px;
+.statement-sheet .statement-td {
+  padding: 3.5px 6px !important;
+  font-size: 12px !important;
 }
 
-.statement-sheet.a4-single-page-fit .statement-section-heading-cell {
-  padding: 4.5px 8px;
-  font-size: 10.5px;
+.statement-sheet .statement-th {
+  padding: 4px 6px !important;
+  font-size: 11.5px !important;
+  font-weight: 800;
 }
 
-.statement-sheet.a4-single-page-fit .statement-subtotal-data-row .statement-td {
-  padding: 5px 8px;
+.statement-sheet .statement-agent-td {
+  padding-left: 4px !important;
 }
 
-.statement-sheet.a4-single-page-fit .statement-grand-total-row .statement-td {
-  padding: 7px 8px;
-  font-size: 12.5px;
+.statement-sheet .statement-agent-name {
+  font-size: 12px !important;
+  font-weight: 700;
 }
 
-.statement-sheet.a4-single-page-fit .statement-signatures-section {
+.statement-sheet .statement-subtotal-indent {
+  padding-left: 4px !important;
+  font-size: 12px !important;
+  font-weight: 800;
+}
+
+.statement-sheet .statement-section-heading-cell {
+  padding: 3.5px 6px !important;
+  font-size: 11.5px !important;
+}
+
+.statement-sheet .statement-subtotal-data-row .statement-td {
+  padding: 4px 6px !important;
+  font-size: 12.5px !important;
+  font-weight: 800;
+}
+
+.statement-sheet .statement-grand-total-row .statement-td {
+  padding: 5px 6px !important;
+  font-size: 13px !important;
+  font-weight: 900;
+}
+
+.statement-sheet .statement-signatures-section {
   margin-top: auto;
-  padding-top: 14px;
+  padding-top: 10px;
+}
+
+/* Supervisor Group Heading Row (for consolidated & multi-group) */
+.statement-group-heading-row {
+  background: #f8fafc;
+}
+
+.statement-group-heading-cell {
+  background: #f1f5f9;
+  color: #0f172a;
+  padding: 4px 6px !important;
+  font-size: 12px !important;
+  font-weight: 800;
+  border-top: 1.5px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  letter-spacing: 0.3px;
+}
+
+.statement-group-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 4px;
+  border: 1px solid #fca5a5;
+  text-transform: none;
 }
 
 /* Density Tiers - Gentle, proportional adjustments */
 .statement-sheet.density-compact .statement-td {
-  padding: 4px 7px !important;
-  font-size: 11px !important;
+  padding: 3px 5px !important;
+  font-size: 11.5px !important;
 }
 .statement-sheet.density-compact .statement-th {
-  padding: 4.5px 7px !important;
-  font-size: 10px !important;
+  padding: 3.5px 5px !important;
+  font-size: 11px !important;
 }
 
 .statement-sheet.density-ultra .statement-td {
-  padding: 3.5px 6px !important;
-  font-size: 10.5px !important;
+  padding: 2.5px 5px !important;
+  font-size: 11px !important;
 }
 .statement-sheet.density-ultra .statement-th {
-  padding: 4px 6px !important;
-  font-size: 9.5px !important;
+  padding: 3px 5px !important;
+  font-size: 10.5px !important;
 }
 
 .statement-sheet.density-micro .statement-td {
-  padding: 3px 5px !important;
-  font-size: 10px !important;
+  padding: 2px 4px !important;
+  font-size: 10.5px !important;
 }
 .statement-sheet.density-micro .statement-th {
-  padding: 3.5px 5px !important;
-  font-size: 9px !important;
+  padding: 2.5px 4px !important;
+  font-size: 10px !important;
 }
 
 .statement-modal-content-area {
-  padding: 14px 16px 32px;
+  padding: 4px 6px 14px;
   overflow-y: auto;
   max-height: 84vh;
   background: #f1f5f9;
@@ -2446,15 +2503,20 @@ button { font: inherit; }
     overflow: visible !important;
   }
 
-  /* Statement Sheet strictly locked to 1 sheet of A4 bond paper, nicely filling the whole page */
+  @page {
+    size: A4 portrait;
+    margin: 4mm 4mm 4mm 4mm !important;
+  }
+
+  /* Statement Sheet strictly locked to 1 sheet of A4 bond paper, nicely filling the whole page with zero indent */
   .statement-sheet {
     box-sizing: border-box !important;
     width: 100% !important;
     max-width: 100% !important;
     height: 100% !important;
-    max-height: calc(297mm - 2.4cm) !important; /* Strict 1 A4 bond paper height limit */
+    max-height: calc(297mm - 8mm) !important;
     padding: 0 !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
@@ -2476,8 +2538,8 @@ button { font: inherit; }
     text-align: center !important;
     margin-top: 0 !important;
     padding-top: 0 !important;
-    margin-bottom: 8px !important;
-    padding-bottom: 5px !important;
+    margin-bottom: 4px !important;
+    padding-bottom: 3px !important;
     border-bottom: 1.5pt solid #0f172a !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
@@ -2489,7 +2551,7 @@ button { font: inherit; }
     font-weight: 900 !important;
     letter-spacing: 0.5px !important;
     color: #0f172a !important;
-    margin: 0 0 2px 0 !important;
+    margin: 0 0 1px 0 !important;
     text-transform: uppercase !important;
     line-height: 1.15 !important;
   }
@@ -2498,10 +2560,10 @@ button { font: inherit; }
     display: inline-block !important;
     background: #f1f5f9 !important;
     border: 1pt solid #cbd5e1 !important;
-    padding: 1px 8px !important;
+    padding: 1px 7px !important;
     border-radius: 3px !important;
     font-size: 8pt !important;
-    margin: 1px 0 3px 0 !important;
+    margin: 1px 0 2px 0 !important;
     color: #0f172a !important;
   }
 
@@ -2516,7 +2578,7 @@ button { font: inherit; }
   .statement-report-subtitle {
     font-size: 7.5pt !important;
     color: #64748b !important;
-    margin: 0 0 3px 0 !important;
+    margin: 0 0 2px 0 !important;
     font-style: italic !important;
   }
 
@@ -2527,12 +2589,12 @@ button { font: inherit; }
     gap: 8px !important;
     background: #f8fafc !important;
     border: 0.75pt solid #cbd5e1 !important;
-    padding: 2px 10px !important;
+    padding: 2px 8px !important;
     border-radius: 4px !important;
     font-size: 8pt !important;
     color: #334155 !important;
     flex-wrap: nowrap !important;
-    margin-top: 2px !important;
+    margin-top: 1px !important;
   }
 
   .statement-meta-pill strong {
@@ -2542,7 +2604,7 @@ button { font: inherit; }
   /* Table Container & Table */
   .statement-table-container {
     overflow: visible !important;
-    margin-bottom: 6px !important;
+    margin-bottom: 4px !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     flex: 1 1 auto !important;
@@ -2552,7 +2614,7 @@ button { font: inherit; }
     width: 100% !important;
     min-width: 100% !important;
     border-collapse: collapse !important;
-    font-size: 8.5pt !important;
+    font-size: 9.5pt !important; /* ~12.5px font size */
     table-layout: fixed !important;
   }
 
@@ -2561,8 +2623,8 @@ button { font: inherit; }
   }
 
   .statement-th {
-    padding: 3.5px 5px !important;
-    font-size: 8pt !important;
+    padding: 2.5px 4px !important;
+    font-size: 9pt !important;
     font-weight: 800 !important;
     letter-spacing: 0.3px !important;
     color: #0f172a !important;
@@ -2572,47 +2634,41 @@ button { font: inherit; }
     text-transform: uppercase !important;
   }
 
-  .statement-th-agent { width: 30% !important; text-align: left !important; }
-  .statement-th-num { width: 14% !important; text-align: right !important; }
+  .statement-th-agent { width: 32% !important; text-align: left !important; }
+  .statement-neg-draw-th { width: 17% !important; text-align: right !important; }
+  .statement-th-remit { width: 17% !important; text-align: right !important; }
 
-  .statement-section-divider-row {
+  .statement-group-heading-row {
     background: #f1f5f9 !important;
   }
 
-  .statement-section-heading-cell {
-    padding: 3px 5px !important;
-    font-size: 7.8pt !important;
+  .statement-group-heading-cell {
+    padding: 2.5px 4px !important;
+    font-size: 9pt !important;
     font-weight: 800 !important;
-    letter-spacing: 0.3px !important;
     color: #0f172a !important;
     background: #f1f5f9 !important;
     border-top: 1pt solid #cbd5e1 !important;
     border-bottom: 1pt solid #cbd5e1 !important;
   }
 
-  .statement-negative-heading-cell {
-    background: #fee2e2 !important;
-    color: #991b1b !important;
-    border-top: 1pt solid #fca5a5 !important;
-    border-bottom: 1pt solid #fca5a5 !important;
-  }
-
   .statement-td {
-    padding: 2.8px 5px !important;
-    font-size: 8.5pt !important;
+    padding: 2.5px 4px !important;
+    font-size: 9.5pt !important; /* ~12.5px font size */
     color: #0f172a !important;
     border-bottom: 0.5pt solid #e2e8f0 !important;
-    line-height: 1.2 !important;
+    line-height: 1.25 !important;
   }
 
   .statement-agent-td {
-    padding-left: 8px !important;
+    padding-left: 3px !important;
     font-weight: 600 !important;
   }
 
   .statement-agent-name {
     font-weight: 600 !important;
     color: #0f172a !important;
+    font-size: 9.5pt !important;
   }
 
   .statement-num-td {
@@ -2622,7 +2678,7 @@ button { font: inherit; }
 
   .accounting-currency-symbol {
     float: left !important;
-    font-size: 7.2pt !important;
+    font-size: 8pt !important;
     color: #64748b !important;
     font-weight: normal !important;
   }
@@ -2633,13 +2689,13 @@ button { font: inherit; }
   }
 
   .statement-empty-state-cell {
-    padding: 4px 8px !important;
-    font-size: 8pt !important;
+    padding: 4px 6px !important;
+    font-size: 9pt !important;
   }
 
   .statement-subtotal-data-row .statement-td {
-    padding: 3.5px 5px !important;
-    font-size: 8.5pt !important;
+    padding: 2.5px 4px !important;
+    font-size: 9.8pt !important;
     font-weight: 700 !important;
     background: #fafafa !important;
   }
@@ -2655,14 +2711,14 @@ button { font: inherit; }
   }
 
   .statement-subtotal-indent {
-    padding-left: 12px !important;
-    font-size: 8pt !important;
+    padding-left: 3px !important;
+    font-size: 9.5pt !important;
     font-weight: 700 !important;
   }
 
   .statement-spacer-divider-row td {
-    padding: 1.5px 0 !important;
-    height: 3px !important;
+    padding: 1px 0 !important;
+    height: 2px !important;
     border: none !important;
   }
 
@@ -2673,17 +2729,17 @@ button { font: inherit; }
   }
 
   .statement-grand-label-td {
-    padding: 4.5px 5px !important;
-    font-size: 8.8pt !important;
+    padding: 3.5px 4px !important;
+    font-size: 10pt !important;
     font-weight: 800 !important;
   }
 
   .statement-grand-num-td {
-    padding: 4.5px 5px !important;
-    font-size: 9.2pt !important;
+    padding: 3.5px 4px !important;
+    font-size: 10.5pt !important;
     font-weight: 900 !important;
     border-top: 1.5pt solid #0f172a !important;
-    border-bottom: 3.5pt double #0f172a !important; /* GAAP DOUBLE UNDERLINE */
+    border-bottom: 3.5pt double #0f172a !important;
   }
 
   /* Signatures section - gracefully docked at the bottom of the single A4 page */
@@ -2693,7 +2749,7 @@ button { font: inherit; }
     align-items: flex-end !important;
     gap: 20px !important;
     margin-top: auto !important;
-    padding-top: 10px !important;
+    padding-top: 6px !important;
     border-top: 1pt dashed #cbd5e1 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
@@ -3647,18 +3703,17 @@ body[data-theme="dark"] {
   }
 }
 
-/* Dark mode overrides */
-[data-theme="dark"] .statement-format-pills {
-  background: #18191a;
+[data-theme="dark"] .statement-group-heading-cell {
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-top-color: #334155 !important;
+  border-bottom-color: #334155 !important;
 }
 
-[data-theme="dark"] .statement-format-btn {
-  color: #b0b3b8;
-}
-
-[data-theme="dark"] .statement-format-btn.active {
-  background: #3a3b3c;
-  color: #ffffff;
+[data-theme="dark"] .statement-group-badge {
+  background: rgba(239, 68, 68, 0.2) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
 }
 
 [data-theme="dark"] .statement-neg-th-row th {

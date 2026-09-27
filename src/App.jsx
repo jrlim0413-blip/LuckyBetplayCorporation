@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import LoginPage from './LoginPage'
 import RbacManagementView from './RbacManagementView'
@@ -753,29 +753,62 @@ function calculateAutoFitScale(agentCount) {
 
 function SupervisorStatementTable({
   group,
+  allSupervisors = [],
   selectedDate,
   branchName = configuredBranch,
   isModal = false,
   fitOnePage = true,
   fontScale = 100,
   densityTier = 'density-standard',
-  statementFormat = 'remittance',
-  onlyDeficitTellers = true,
 }) {
-  const { positive, negative } = splitAgentsByRemittance(group?.agents || [])
-  const positiveTotals = calculateMetricsTotals(positive)
-  const negativeTotals = calculateMetricsTotals(negative)
-  const negativeDrawTotals = {
-    draw1Deficit: negative.reduce((sum, a) => sum + (a.draw1Deficit || 0), 0),
-    draw2Deficit: negative.reduce((sum, a) => sum + (a.draw2Deficit || 0), 0),
-    draw3Deficit: negative.reduce((sum, a) => sum + (a.draw3Deficit || 0), 0),
-  }
+  const isConsolidated = group?.supervisor === 'ALL SUPERVISORS (CONSOLIDATED)' || (!group?.supervisor && allSupervisors.length > 0)
+
+  // Extract supervisor groups with their agents' negative deficits
+  const supervisorGroups = useMemo(() => {
+    const rawGroups = (isConsolidated && allSupervisors && allSupervisors.length > 0)
+      ? allSupervisors
+      : [group || { supervisor: 'BRANCH SUPERVISOR', agents: [] }]
+
+    return rawGroups.map((s) => {
+      const negativeAgents = (s.agents || [])
+        .map((a) => {
+          const metrics = getAgentOverallMetrics(a)
+          const drawMetrics = getAgentDrawDeficitMetrics(a)
+          const totalDeficit = drawMetrics.remittanceDeficit > 0
+            ? drawMetrics.remittanceDeficit
+            : (metrics.netSales < 0 ? Math.abs(metrics.netSales) : ((drawMetrics.draw1Deficit || 0) + (drawMetrics.draw2Deficit || 0) + (drawMetrics.draw3Deficit || 0)))
+          return {
+            ...a,
+            ...metrics,
+            ...drawMetrics,
+            totalDeficit,
+          }
+        })
+        .filter((a) => a.hasAnyDrawDeficit || a.draw1Deficit > 0 || a.draw2Deficit > 0 || a.draw3Deficit > 0 || a.totalDeficit > 0)
+
+      const subtotals = {
+        draw1: negativeAgents.reduce((sum, a) => sum + (a.draw1Deficit || 0), 0),
+        draw2: negativeAgents.reduce((sum, a) => sum + (a.draw2Deficit || 0), 0),
+        draw3: negativeAgents.reduce((sum, a) => sum + (a.draw3Deficit || 0), 0),
+        totalDeficit: negativeAgents.reduce((sum, a) => sum + (a.totalDeficit || 0), 0),
+      }
+
+      return {
+        supervisor: s.supervisor,
+        agents: negativeAgents,
+        subtotals,
+      }
+    })
+  }, [group, allSupervisors, isConsolidated])
+
+  const groupsWithDeficits = supervisorGroups.filter((g) => g.agents.length > 0)
+
   const grandTotals = {
-    gross: positiveTotals.gross + negativeTotals.gross,
-    hits: positiveTotals.hits + negativeTotals.hits,
-    commission: positiveTotals.commission + negativeTotals.commission,
-    net: positiveTotals.net + negativeTotals.net,
-    netSales: positiveTotals.netSales + negativeTotals.netSales,
+    draw1: groupsWithDeficits.reduce((sum, g) => sum + g.subtotals.draw1, 0),
+    draw2: groupsWithDeficits.reduce((sum, g) => sum + g.subtotals.draw2, 0),
+    draw3: groupsWithDeficits.reduce((sum, g) => sum + g.subtotals.draw3, 0),
+    totalDeficit: groupsWithDeficits.reduce((sum, g) => sum + g.subtotals.totalDeficit, 0),
+    totalDeficitAgents: groupsWithDeficits.reduce((sum, g) => sum + g.agents.length, 0),
   }
 
   const effectiveScale = fitOnePage ? (fontScale || 100) : 100
@@ -788,264 +821,6 @@ function SupervisorStatementTable({
         '--statement-scale': '1',
       }
 
-  // MODE 1: Dedicated Draw Deficits (Rotations) Statement
-  if (statementFormat === 'deficits_rotations') {
-    const allGroupAgents = (group?.agents || []).map((a) => ({
-      ...a,
-      ...getAgentDrawDeficitMetrics(a),
-    }))
-    const displayedAgents = onlyDeficitTellers
-      ? allGroupAgents.filter((a) => a.hasAnyDrawDeficit)
-      : allGroupAgents
-
-    const totals = {
-      draw1: displayedAgents.reduce((sum, a) => sum + (a.draw1Deficit || 0), 0),
-      draw2: displayedAgents.reduce((sum, a) => sum + (a.draw2Deficit || 0), 0),
-      draw3: displayedAgents.reduce((sum, a) => sum + (a.draw3Deficit || 0), 0),
-      commission: displayedAgents.reduce((sum, a) => sum + (a.commission || 0), 0),
-      remittance: displayedAgents.reduce((sum, a) => sum + (a.remittanceDeficit || 0), 0),
-    }
-
-    return (
-      <div
-        className={`statement-sheet ${isModal ? 'statement-sheet-modal' : 'statement-sheet-inline'} ${fitOnePage ? 'a4-single-page-fit' : ''} ${densityTier}`}
-        style={scaleStyle}
-      >
-        <div className="statement-header-block">
-          <h3 className="statement-company-title">LUCKY BETPLAY CORPORATION</h3>
-          <div className="statement-branch-tag">
-            <span>BRANCH:</span> <strong>{(branchName || 'Mandaue').toUpperCase()}</strong>
-          </div>
-          <h4 className="statement-report-title">SUPERVISOR DRAW-BY-DRAW DEFICIT AUDIT STATEMENT</h4>
-          <p className="statement-report-subtitle">(Official Draw Deficits &amp; Negative Balances Ledger)</p>
-          <div className="statement-meta-row">
-            <span className="statement-meta-pill"><strong>BRANCH:</strong> {branchName}</span>
-            <span className="statement-meta-divider">•</span>
-            <span className="statement-meta-pill"><strong>SUPERVISOR:</strong> {group?.supervisor || 'ALL'}</span>
-            <span className="statement-meta-divider">•</span>
-            <span className="statement-meta-pill"><strong>DATE:</strong> {formatDisplayDate(selectedDate)}</span>
-            <span className="statement-meta-divider">•</span>
-            <span className="statement-meta-pill"><strong>DEFICIT AGENTS:</strong> {displayedAgents.length}</span>
-          </div>
-        </div>
-
-        <div className="statement-table-container">
-          <table className="statement-balance-table">
-            <thead>
-              <tr className="statement-th-row statement-neg-th-row">
-                <th className="statement-th statement-th-agent">AGENT / TELLER</th>
-                <th className="statement-th statement-th-num statement-neg-draw-th">1ST DRAW (10:30+2:00)</th>
-                <th className="statement-th statement-th-num statement-neg-draw-th">2ND DRAW (3:00+5:00)</th>
-                <th className="statement-th statement-th-num statement-neg-draw-th">3RD DRAW (7:00+9:00)</th>
-                <th className="statement-th statement-th-num">COMMISSION</th>
-                <th className="statement-th statement-th-num statement-th-remit">NET REMITTANCE DEFICIT</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedAgents.length === 0 ? (
-                <tr className="statement-empty-state-row">
-                  <td colSpan={6} className="statement-empty-state-cell statement-clean-indicator">
-                    ✓ No negative deficits recorded — all tellers under {group?.supervisor || 'supervisor'} have clean/positive balances.
-                  </td>
-                </tr>
-              ) : (
-                displayedAgents.map((agent, index) => (
-                  <tr key={`draw-neg-${agent.key || index}`} className="statement-data-row statement-neg-row">
-                    <td className="statement-td statement-agent-td">
-                      <span className="statement-agent-name">{agent.teller}</span>
-                    </td>
-                    <td className={`statement-td statement-num-td ${agent.draw1Deficit > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
-                      {agent.draw1Deficit > 0 ? `(${formatAmount(agent.draw1Deficit)})` : '—'}
-                    </td>
-                    <td className={`statement-td statement-num-td ${agent.draw2Deficit > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
-                      {agent.draw2Deficit > 0 ? `(${formatAmount(agent.draw2Deficit)})` : '—'}
-                    </td>
-                    <td className={`statement-td statement-num-td ${agent.draw3Deficit > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
-                      {agent.draw3Deficit > 0 ? `(${formatAmount(agent.draw3Deficit)})` : '—'}
-                    </td>
-                    <td className="statement-td statement-num-td">
-                      {formatAmount(agent.commission)}
-                      {agent.commissionRate && (
-                        <small style={{ display: 'block', fontSize: '9px', color: '#64748b' }}>({agent.commissionRate}%)</small>
-                      )}
-                    </td>
-                    <td className="statement-td statement-num-td statement-remit-td accounting-deficit-text">
-                      {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                      <strong>{agent.remittanceDeficit > 0 ? `(${formatAmount(agent.remittanceDeficit)})` : '—'}</strong>
-                    </td>
-                  </tr>
-                ))
-              )}
-
-              <tr className="statement-subtotal-data-row statement-neg-subtotal-row">
-                <td className="statement-td statement-subtotal-label-td">
-                  <span className="statement-subtotal-indent statement-neg-label-indent">Total Draw Deficits (Subtotal)</span>
-                </td>
-                <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                  {totals.draw1 > 0 ? <strong>({formatAmount(totals.draw1)})</strong> : '—'}
-                </td>
-                <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                  {totals.draw2 > 0 ? <strong>({formatAmount(totals.draw2)})</strong> : '—'}
-                </td>
-                <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                  {totals.draw3 > 0 ? <strong>({formatAmount(totals.draw3)})</strong> : '—'}
-                </td>
-                <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
-                  <strong>{formatAmount(totals.commission)}</strong>
-                </td>
-                <td className="statement-td statement-subtotal-num-td statement-remit-td statement-neg-subtotal-cell accounting-deficit-text">
-                  <span className="accounting-currency-symbol">₱</span>
-                  <strong>{totals.remittance > 0 ? `(${formatAmount(totals.remittance)})` : '₱ 0.00'}</strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div className="statement-signatures-section">
-          <div className="statement-sig-column">
-            <div className="statement-sig-line" />
-            <span className="statement-sig-title">SUPERVISOR - {branchName ? branchName.toUpperCase() : 'MANDAUE CITY'}</span>
-            <strong className="statement-sig-name">{group?.supervisor || 'BRANCH SUPERVISOR'}</strong>
-            <span className="statement-sig-date">Date Signed: _____________________</span>
-          </div>
-          <div className="statement-sig-column">
-            <div className="statement-sig-line" />
-            <span className="statement-sig-title">HEAD CASHIER / RECEIVER</span>
-            <strong className="statement-sig-name">Authorized Head Cashier ({branchName})</strong>
-            <span className="statement-sig-date">Date Received: _____________________</span>
-          </div>
-        </div>
-        <div className="statement-print-footer-tag">
-          LUCKY BETPLAY CORPORATION • OFFICIAL DRAW DEFICIT AUDIT • A4 RECORD • {formatDisplayDate(selectedDate)}
-        </div>
-      </div>
-    )
-  }
-
-  // MODE 2: Individual 6 Draws Deficit Matrix
-  if (statementFormat === 'deficits_times') {
-    const times = ['10:30 AM', '2:00 PM', '3:00 PM', '5:00 PM', '7:00 PM', '9:00 PM']
-    const allGroupAgents = (group?.agents || []).map((a) => ({
-      ...a,
-      ...getAgentDrawDeficitMetrics(a),
-    }))
-    const displayedAgents = onlyDeficitTellers
-      ? allGroupAgents.filter((a) => a.hasAnyDrawDeficit)
-      : allGroupAgents
-
-    const timeTotals = {}
-    times.forEach((t) => {
-      timeTotals[t] = displayedAgents.reduce((sum, a) => sum + (a.timeDeficits?.[t] || 0), 0)
-    })
-    const totalRemittance = displayedAgents.reduce((sum, a) => sum + (a.remittanceDeficit || 0), 0)
-
-    return (
-      <div
-        className={`statement-sheet ${isModal ? 'statement-sheet-modal' : 'statement-sheet-inline'} ${fitOnePage ? 'a4-single-page-fit' : ''} ${densityTier}`}
-        style={scaleStyle}
-      >
-        <div className="statement-header-block">
-          <h3 className="statement-company-title">LUCKY BETPLAY CORPORATION</h3>
-          <div className="statement-branch-tag">
-            <span>BRANCH:</span> <strong>{(branchName || 'Mandaue').toUpperCase()}</strong>
-          </div>
-          <h4 className="statement-report-title">INDIVIDUAL DRAWS DEFICIT MATRIX (6 DRAWS)</h4>
-          <p className="statement-report-subtitle">(Official Schedule-by-Schedule Deficit Audit Ledger)</p>
-          <div className="statement-meta-row">
-            <span className="statement-meta-pill"><strong>BRANCH:</strong> {branchName}</span>
-            <span className="statement-meta-divider">•</span>
-            <span className="statement-meta-pill"><strong>SUPERVISOR:</strong> {group?.supervisor || 'ALL'}</span>
-            <span className="statement-meta-divider">•</span>
-            <span className="statement-meta-pill"><strong>DATE:</strong> {formatDisplayDate(selectedDate)}</span>
-            <span className="statement-meta-divider">•</span>
-            <span className="statement-meta-pill"><strong>DEFICIT AGENTS:</strong> {displayedAgents.length}</span>
-          </div>
-        </div>
-
-        <div className="statement-table-container">
-          <table className="statement-balance-table statement-times-matrix-table">
-            <thead>
-              <tr className="statement-th-row statement-neg-th-row">
-                <th className="statement-th statement-th-agent">AGENT / TELLER</th>
-                {times.map((t) => (
-                  <th key={t} className="statement-th statement-th-num statement-neg-draw-th">{t}</th>
-                ))}
-                <th className="statement-th statement-th-num statement-th-remit">TOTAL DEFICIT</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedAgents.length === 0 ? (
-                <tr className="statement-empty-state-row">
-                  <td colSpan={8} className="statement-empty-state-cell statement-clean-indicator">
-                    ✓ No draw deficits recorded for {group?.supervisor || 'supervisor'}.
-                  </td>
-                </tr>
-              ) : (
-                displayedAgents.map((agent, index) => (
-                  <tr key={`time-neg-${agent.key || index}`} className="statement-data-row statement-neg-row">
-                    <td className="statement-td statement-agent-td">
-                      <span className="statement-agent-name">{agent.teller}</span>
-                    </td>
-                    {times.map((t) => {
-                      const val = agent.timeDeficits?.[t] || 0
-                      return (
-                        <td key={t} className={`statement-td statement-num-td ${val > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
-                          {val > 0 ? `(${formatAmount(val)})` : '—'}
-                        </td>
-                      )
-                    })}
-                    <td className="statement-td statement-num-td statement-remit-td accounting-deficit-text">
-                      {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                      <strong>{agent.remittanceDeficit > 0 ? `(${formatAmount(agent.remittanceDeficit)})` : '—'}</strong>
-                    </td>
-                  </tr>
-                ))
-              )}
-
-              <tr className="statement-subtotal-data-row statement-neg-subtotal-row">
-                <td className="statement-td statement-subtotal-label-td">
-                  <span className="statement-subtotal-indent statement-neg-label-indent">Total Deficits (Subtotal)</span>
-                </td>
-                {times.map((t) => {
-                  const sub = timeTotals[t] || 0
-                  return (
-                    <td key={t} className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                      {sub > 0 ? <strong>({formatAmount(sub)})</strong> : '—'}
-                    </td>
-                  )
-                })}
-                <td className="statement-td statement-subtotal-num-td statement-remit-td statement-neg-subtotal-cell accounting-deficit-text">
-                  <span className="accounting-currency-symbol">₱</span>
-                  <strong>{totalRemittance > 0 ? `(${formatAmount(totalRemittance)})` : '₱ 0.00'}</strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div className="statement-signatures-section">
-          <div className="statement-sig-column">
-            <div className="statement-sig-line" />
-            <span className="statement-sig-title">SUPERVISOR - {branchName ? branchName.toUpperCase() : 'MANDAUE CITY'}</span>
-            <strong className="statement-sig-name">{group?.supervisor || 'BRANCH SUPERVISOR'}</strong>
-            <span className="statement-sig-date">Date Signed: _____________________</span>
-          </div>
-          <div className="statement-sig-column">
-            <div className="statement-sig-line" />
-            <span className="statement-sig-title">HEAD CASHIER / RECEIVER</span>
-            <strong className="statement-sig-name">Authorized Head Cashier ({branchName})</strong>
-            <span className="statement-sig-date">Date Received: _____________________</span>
-          </div>
-        </div>
-        <div className="statement-print-footer-tag">
-          LUCKY BETPLAY CORPORATION • OFFICIAL DRAW DEFICIT AUDIT • A4 RECORD • {formatDisplayDate(selectedDate)}
-        </div>
-      </div>
-    )
-  }
-
-  // MODE 3 (DEFAULT): Standard Consolidated Remittance Statement with Per-Draw Negative Deficits Breakdown
   return (
     <div
       className={`statement-sheet ${isModal ? 'statement-sheet-modal' : 'statement-sheet-inline'} ${fitOnePage ? 'a4-single-page-fit' : ''} ${densityTier}`}
@@ -1056,195 +831,130 @@ function SupervisorStatementTable({
         <div className="statement-branch-tag">
           <span>BRANCH:</span> <strong>{(branchName || 'Mandaue').toUpperCase()}</strong>
         </div>
-        <h4 className="statement-report-title">CONDENSED SUPERVISOR AGENT REMITTANCE SUMMARY</h4>
-        <p className="statement-report-subtitle">(Unaudited — Official Draw Performance &amp; Accounting Ledger)</p>
+        <h4 className="statement-report-title">SUPERVISOR DRAW-BY-DRAW DEFICIT AUDIT STATEMENT</h4>
+        <p className="statement-report-subtitle">(Official Draw Deficits &amp; Negative Balances Ledger)</p>
         <div className="statement-meta-row">
           <span className="statement-meta-pill"><strong>BRANCH:</strong> {branchName}</span>
           <span className="statement-meta-divider">•</span>
-          <span className="statement-meta-pill"><strong>SUPERVISOR:</strong> {group?.supervisor || 'ALL'}</span>
+          <span className="statement-meta-pill"><strong>SUPERVISOR:</strong> {isConsolidated ? 'ALL SUPERVISORS (CONSOLIDATED)' : (group?.supervisor || 'ALL')}</span>
           <span className="statement-meta-divider">•</span>
           <span className="statement-meta-pill"><strong>DATE:</strong> {formatDisplayDate(selectedDate)}</span>
           <span className="statement-meta-divider">•</span>
-          <span className="statement-meta-pill"><strong>TOTAL AGENTS:</strong> {group?.agents?.length || 0}</span>
+          <span className="statement-meta-pill"><strong>DEFICIT AGENTS:</strong> {grandTotals.totalDeficitAgents}</span>
         </div>
       </div>
 
       <div className="statement-table-container">
         <table className="statement-balance-table">
           <thead>
-            <tr className="statement-th-row">
-              <th className="statement-th statement-th-agent">AGENT / TELLER</th>
-              <th className="statement-th statement-th-num">GROSS</th>
-              <th className="statement-th statement-th-num">HITS</th>
-              <th className="statement-th statement-th-num">COMMISSION</th>
-              <th className="statement-th statement-th-num">NET</th>
-              <th className="statement-th statement-th-num statement-th-remit">NET SALES / REMITTANCE</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="statement-section-divider-row">
-              <td colSpan={6} className="statement-section-heading-cell">
-                <strong>POSITIVE REMITTANCES (TO COLLECT):</strong>
-              </td>
-            </tr>
-
-            {positive.length === 0 ? (
-              <tr className="statement-empty-state-row">
-                <td colSpan={6} className="statement-empty-state-cell">
-                  No positive remittance agents recorded for this period.
-                </td>
-              </tr>
-            ) : (
-              positive.map((agent, index) => (
-                <tr key={`pos-${agent.key || index}`} className="statement-data-row statement-pos-row">
-                  <td className="statement-td statement-agent-td">
-                    <span className="statement-agent-name">{agent.teller}</span>
-                  </td>
-                  <td className="statement-td statement-num-td">
-                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                    {formatAmount(agent.gross)}
-                  </td>
-                  <td className="statement-td statement-num-td">{formatAmount(agent.hits)}</td>
-                  <td className="statement-td statement-num-td">
-                    {formatAmount(agent.commission)}
-                    {agent.commissionRate && (
-                      <small style={{ display: 'block', fontSize: '9px', color: '#64748b' }}>({agent.commissionRate}%)</small>
-                    )}
-                  </td>
-                  <td className="statement-td statement-num-td">{formatAmount(agent.net)}</td>
-                  <td className="statement-td statement-num-td statement-remit-td">
-                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                    <strong>{formatAmount(agent.netSales)}</strong>
-                  </td>
-                </tr>
-              ))
-            )}
-
-            <tr className="statement-subtotal-data-row statement-pos-subtotal-row">
-              <td className="statement-td statement-subtotal-label-td">
-                <span className="statement-subtotal-indent">Total Positive Remittances (Subtotal)</span>
-              </td>
-              <td className="statement-td statement-subtotal-num-td">
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>{formatAmount(positiveTotals.gross)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td">
-                <strong>{formatAmount(positiveTotals.hits)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td">
-                <strong>{formatAmount(positiveTotals.commission)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td">
-                <strong>{formatAmount(positiveTotals.net)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-remit-td">
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>{formatAmount(positiveTotals.netSales)}</strong>
-              </td>
-            </tr>
-
-            <tr className="statement-spacer-divider-row" aria-hidden="true">
-              <td colSpan={6} />
-            </tr>
-
-            <tr className="statement-section-divider-row statement-negative-header-row">
-              <td colSpan={6} className="statement-section-heading-cell statement-negative-heading-cell">
-                <strong>NEGATIVE DEFICITS (PER DRAW BREAKDOWN):</strong>
-              </td>
-            </tr>
-
             <tr className="statement-th-row statement-neg-th-row">
               <th className="statement-th statement-th-agent">AGENT / TELLER</th>
               <th className="statement-th statement-th-num statement-neg-draw-th">1ST DRAW (10:30+2:00)</th>
               <th className="statement-th statement-th-num statement-neg-draw-th">2ND DRAW (3:00+5:00)</th>
               <th className="statement-th statement-th-num statement-neg-draw-th">3RD DRAW (7:00+9:00)</th>
-              <th className="statement-th statement-th-num">COMMISSION</th>
-              <th className="statement-th statement-th-num statement-th-remit">NET REMITTANCE DEFICIT</th>
+              <th className="statement-th statement-th-num statement-th-remit">TOTAL DEFICIT</th>
             </tr>
-
-            {negative.length === 0 ? (
+          </thead>
+          <tbody>
+            {groupsWithDeficits.length === 0 ? (
               <tr className="statement-empty-state-row">
-                <td colSpan={6} className="statement-empty-state-cell statement-clean-indicator">
-                  ✓ No negative deficit records — all {positive.length} agents have positive balances.
+                <td colSpan={5} className="statement-empty-state-cell statement-clean-indicator">
+                  ✓ No negative deficits recorded — all tellers under {group?.supervisor || 'supervisor'} have clean/positive balances.
                 </td>
               </tr>
             ) : (
-              negative.map((agent, index) => (
-                <tr key={`neg-${agent.key || index}`} className="statement-data-row statement-neg-row">
-                  <td className="statement-td statement-agent-td">
-                    <span className="statement-agent-name">{agent.teller}</span>
-                  </td>
-                  <td className={`statement-td statement-num-td ${agent.draw1Deficit > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
-                    {agent.draw1Deficit > 0 ? `(${formatAmount(agent.draw1Deficit)})` : '—'}
-                  </td>
-                  <td className={`statement-td statement-num-td ${agent.draw2Deficit > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
-                    {agent.draw2Deficit > 0 ? `(${formatAmount(agent.draw2Deficit)})` : '—'}
-                  </td>
-                  <td className={`statement-td statement-num-td ${agent.draw3Deficit > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
-                    {agent.draw3Deficit > 0 ? `(${formatAmount(agent.draw3Deficit)})` : '—'}
-                  </td>
-                  <td className="statement-td statement-num-td">
-                    {formatAmount(agent.commission)}
-                    {agent.commissionRate && (
-                      <small style={{ display: 'block', fontSize: '9px', color: '#64748b' }}>({agent.commissionRate}%)</small>
-                    )}
-                  </td>
-                  <td className="statement-td statement-num-td statement-remit-td accounting-deficit-text">
-                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                    <strong>({formatAmount(Math.abs(agent.netSales))})</strong>
-                  </td>
-                </tr>
+              groupsWithDeficits.map((g, gIdx) => (
+                <Fragment key={`grp-${g.supervisor || gIdx}`}>
+                  {/* Supervisor Group Header Row (when consolidated or multiple groups) */}
+                  {(isConsolidated || groupsWithDeficits.length > 1) && (
+                    <tr className="statement-group-heading-row">
+                      <td colSpan={5} className="statement-group-heading-cell">
+                        <strong>SUPERVISOR: {g.supervisor}</strong>
+                        <span className="statement-group-badge">{g.agents.length} Deficit {g.agents.length === 1 ? 'Teller' : 'Tellers'}</span>
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* Negative Agents Under this Supervisor */}
+                  {g.agents.map((agent, aIdx) => (
+                    <tr key={`draw-neg-${g.supervisor}-${agent.key || agent.teller}-${aIdx}`} className="statement-data-row statement-neg-row">
+                      <td className="statement-td statement-agent-td">
+                        <span className="statement-agent-name">{agent.teller}</span>
+                      </td>
+                      <td className={`statement-td statement-num-td ${agent.draw1Deficit > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
+                        {agent.draw1Deficit > 0 ? `(${formatAmount(agent.draw1Deficit)})` : '—'}
+                      </td>
+                      <td className={`statement-td statement-num-td ${agent.draw2Deficit > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
+                        {agent.draw2Deficit > 0 ? `(${formatAmount(agent.draw2Deficit)})` : '—'}
+                      </td>
+                      <td className={`statement-td statement-num-td ${agent.draw3Deficit > 0 ? 'accounting-deficit-text' : 'statement-clean-dash'}`}>
+                        {agent.draw3Deficit > 0 ? `(${formatAmount(agent.draw3Deficit)})` : '—'}
+                      </td>
+                      <td className="statement-td statement-num-td statement-remit-td accounting-deficit-text">
+                        {gIdx === 0 && aIdx === 0 && <span className="accounting-currency-symbol">₱</span>}
+                        <strong>{agent.totalDeficit > 0 ? `(${formatAmount(agent.totalDeficit)})` : '—'}</strong>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Subtotal Row Per Group */}
+                  <tr className="statement-subtotal-data-row statement-neg-subtotal-row">
+                    <td className="statement-td statement-subtotal-label-td">
+                      <span className="statement-subtotal-indent statement-neg-label-indent">
+                        {isConsolidated ? `Subtotal - ${g.supervisor}` : 'Total Draw Deficits (Subtotal)'}
+                      </span>
+                    </td>
+                    <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
+                      {g.subtotals.draw1 > 0 ? <strong>({formatAmount(g.subtotals.draw1)})</strong> : '—'}
+                    </td>
+                    <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
+                      {g.subtotals.draw2 > 0 ? <strong>({formatAmount(g.subtotals.draw2)})</strong> : '—'}
+                    </td>
+                    <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
+                      {g.subtotals.draw3 > 0 ? <strong>({formatAmount(g.subtotals.draw3)})</strong> : '—'}
+                    </td>
+                    <td className="statement-td statement-subtotal-num-td statement-remit-td statement-neg-subtotal-cell accounting-deficit-text">
+                      <span className="accounting-currency-symbol">₱</span>
+                      <strong>{g.subtotals.totalDeficit > 0 ? `(${formatAmount(g.subtotals.totalDeficit)})` : '₱ 0.00'}</strong>
+                    </td>
+                  </tr>
+
+                  {/* Spacer between groups */}
+                  {(isConsolidated || groupsWithDeficits.length > 1) && (gIdx < groupsWithDeficits.length - 1) && (
+                    <tr className="statement-spacer-divider-row" aria-hidden="true">
+                      <td colSpan={5} />
+                    </tr>
+                  )}
+                </Fragment>
               ))
             )}
 
-            <tr className="statement-subtotal-data-row statement-neg-subtotal-row">
-              <td className="statement-td statement-subtotal-label-td">
-                <span className="statement-subtotal-indent statement-neg-label-indent">Total Deficits (Subtotal)</span>
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                {negativeDrawTotals.draw1Deficit > 0 ? <strong>({formatAmount(negativeDrawTotals.draw1Deficit)})</strong> : '—'}
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                {negativeDrawTotals.draw2Deficit > 0 ? <strong>({formatAmount(negativeDrawTotals.draw2Deficit)})</strong> : '—'}
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                {negativeDrawTotals.draw3Deficit > 0 ? <strong>({formatAmount(negativeDrawTotals.draw3Deficit)})</strong> : '—'}
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
-                <strong>{formatAmount(negativeTotals.commission)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-remit-td statement-neg-subtotal-cell accounting-deficit-text">
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>({formatAmount(Math.abs(negativeTotals.netSales))})</strong>
-              </td>
-            </tr>
-
-            <tr className="statement-spacer-divider-row" aria-hidden="true">
-              <td colSpan={6} />
-            </tr>
-
-            <tr className="statement-grand-total-row">
-              <td className="statement-td statement-grand-label-td">
-                <strong>CONSOLIDATED SUPERVISOR TOTAL (OVERALL DRAWS)</strong>
-              </td>
-              <td className="statement-td statement-grand-num-td">
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>{formatAmount(grandTotals.gross)}</strong>
-              </td>
-              <td className="statement-td statement-grand-num-td">
-                <strong>{formatAmount(grandTotals.hits)}</strong>
-              </td>
-              <td className="statement-td statement-grand-num-td">
-                <strong>{formatAmount(grandTotals.commission)}</strong>
-              </td>
-              <td className="statement-td statement-grand-num-td">
-                <strong>{formatAmount(grandTotals.net)}</strong>
-              </td>
-              <td className={`statement-td statement-grand-num-td statement-remit-td ${grandTotals.netSales < 0 ? 'accounting-deficit-text' : ''}`}>
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>{grandTotals.netSales < 0 ? `(${formatAmount(Math.abs(grandTotals.netSales))})` : formatAmount(grandTotals.netSales)}</strong>
-              </td>
-            </tr>
+            {/* Grand Total Row (when consolidated or multiple groups) */}
+            {(isConsolidated || groupsWithDeficits.length > 1) && groupsWithDeficits.length > 0 && (
+              <>
+                <tr className="statement-spacer-divider-row" aria-hidden="true">
+                  <td colSpan={5} />
+                </tr>
+                <tr className="statement-grand-total-row statement-neg-grand-total-row">
+                  <td className="statement-td statement-grand-label-td">
+                    <strong>CONSOLIDATED GRAND TOTAL DEFICITS (ALL SUPERVISORS)</strong>
+                  </td>
+                  <td className="statement-td statement-grand-num-td accounting-deficit-text">
+                    {grandTotals.draw1 > 0 ? <strong>({formatAmount(grandTotals.draw1)})</strong> : '—'}
+                  </td>
+                  <td className="statement-td statement-grand-num-td accounting-deficit-text">
+                    {grandTotals.draw2 > 0 ? <strong>({formatAmount(grandTotals.draw2)})</strong> : '—'}
+                  </td>
+                  <td className="statement-td statement-grand-num-td accounting-deficit-text">
+                    {grandTotals.draw3 > 0 ? <strong>({formatAmount(grandTotals.draw3)})</strong> : '—'}
+                  </td>
+                  <td className="statement-td statement-grand-num-td statement-remit-td accounting-deficit-text">
+                    <span className="accounting-currency-symbol">₱</span>
+                    <strong>{grandTotals.totalDeficit > 0 ? `(${formatAmount(grandTotals.totalDeficit)})` : '₱ 0.00'}</strong>
+                  </td>
+                </tr>
+              </>
+            )}
           </tbody>
         </table>
       </div>
@@ -1253,7 +963,7 @@ function SupervisorStatementTable({
         <div className="statement-sig-column">
           <div className="statement-sig-line" />
           <span className="statement-sig-title">SUPERVISOR - {branchName ? branchName.toUpperCase() : 'MANDAUE CITY'}</span>
-          <strong className="statement-sig-name">{group?.supervisor || 'BRANCH SUPERVISOR'}</strong>
+          <strong className="statement-sig-name">{isConsolidated ? 'ALL BRANCH SUPERVISORS' : (group?.supervisor || 'BRANCH SUPERVISOR')}</strong>
           <span className="statement-sig-date">Date Signed: _____________________</span>
         </div>
         <div className="statement-sig-column">
@@ -1264,7 +974,7 @@ function SupervisorStatementTable({
         </div>
       </div>
       <div className="statement-print-footer-tag">
-        LUCKY BETPLAY CORPORATION • OFFICIAL REMITTANCE STATEMENT • A4 RECORD • {formatDisplayDate(selectedDate)}
+        LUCKY BETPLAY CORPORATION • OFFICIAL DRAW DEFICIT AUDIT • A4 RECORD • {formatDisplayDate(selectedDate)}
       </div>
     </div>
   )
@@ -1400,20 +1110,20 @@ function SupervisorStatementModal({
   canPrint = true,
   currentUser = null,
 }) {
-  const [statementFormat, setStatementFormat] = useState('remittance') // 'remittance' | 'deficits_rotations' | 'deficits_times'
-  const [onlyDeficitTellers, setOnlyDeficitTellers] = useState(true)
-  const [fitOnePage, setFitOnePage] = useState(true)
+  const isConsolidated = group?.supervisor === 'ALL SUPERVISORS (CONSOLIDATED)'
 
   const displayedAgentCount = useMemo(() => {
-    if (statementFormat === 'remittance') return group?.agents?.length || 0
-    if (!onlyDeficitTellers) return group?.agents?.length || 0
-    return (group?.agents || []).filter((a) => {
+    const list = (isConsolidated && allSupervisors.length > 0)
+      ? allSupervisors.flatMap((s) => s.agents || [])
+      : (group?.agents || [])
+    return list.filter((a) => {
       const d = getAgentDrawDeficitMetrics(a)
-      return d.hasAnyDrawDeficit
+      return d.hasAnyDrawDeficit || d.draw1Deficit > 0 || d.draw2Deficit > 0 || d.draw3Deficit > 0 || d.remittanceDeficit > 0
     }).length || 0
-  }, [group, statementFormat, onlyDeficitTellers])
+  }, [group, allSupervisors, isConsolidated])
 
   const recommendedScale = useMemo(() => calculateAutoFitScale(displayedAgentCount), [displayedAgentCount])
+  const [fitOnePage, setFitOnePage] = useState(true)
   const [isAutoFit, setIsAutoFit] = useState(true)
   const [manualScale, setManualScale] = useState(recommendedScale)
 
@@ -1472,7 +1182,7 @@ function SupervisorStatementModal({
       <div className="statement-modal-shell" onClick={(e) => e.stopPropagation()}>
         <div className="statement-modal-controls-bar no-print">
           <div className="statement-controls-left">
-            <span className="statement-controls-title">Official Remittance Statement</span>
+            <span className="statement-controls-title">Negatives Per Draw Statement</span>
             <span className="statement-a4-badge" title="Standard A4 Bond Paper (210 x 297mm)">
               <Icon name="fileText" size={12} />
               <span>A4 Bond Paper</span>
@@ -1502,47 +1212,6 @@ function SupervisorStatementModal({
                   </optgroup>
                 </select>
               </div>
-            )}
-
-            <div className="statement-format-pills" role="group" aria-label="Statement Format">
-              <button
-                type="button"
-                className={`statement-format-btn ${statementFormat === 'remittance' ? 'active' : ''}`}
-                onClick={() => setStatementFormat('remittance')}
-                title="Consolidated Remittance Statement (Positive Remittances on top, Negatives Per Draw on bottom)"
-              >
-                <Icon name="fileText" size={12} />
-                <span>Remittance &amp; Negatives</span>
-              </button>
-              <button
-                type="button"
-                className={`statement-format-btn ${statementFormat === 'deficits_rotations' ? 'active' : ''}`}
-                onClick={() => setStatementFormat('deficits_rotations')}
-                title="Dedicated Draw Deficit Statement (Per Draw Headers, Agent on Left, Negatives per Draw)"
-              >
-                <Icon name="alert" size={12} />
-                <span>Negatives Per Draw</span>
-              </button>
-              <button
-                type="button"
-                className={`statement-format-btn ${statementFormat === 'deficits_times' ? 'active' : ''}`}
-                onClick={() => setStatementFormat('deficits_times')}
-                title="Individual 6-Draw Deficit Matrix (10:30, 2:00, 3:00, 5:00, 7:00, 9:00)"
-              >
-                <Icon name="fields" size={12} />
-                <span>6 Draws Matrix</span>
-              </button>
-            </div>
-
-            {statementFormat !== 'remittance' && (
-              <label className="statement-deficit-only-toggle" title="Show only tellers with deficits or include all tellers">
-                <input
-                  type="checkbox"
-                  checked={onlyDeficitTellers}
-                  onChange={(e) => setOnlyDeficitTellers(e.target.checked)}
-                />
-                <span>Only Deficit Tellers</span>
-              </label>
             )}
           </div>
           <div className="statement-controls-right">
@@ -1662,17 +1331,13 @@ function SupervisorStatementModal({
             <div className="statement-preview-meta-info">
               <span className="statement-preview-page-pill">
                 <Icon name="fileText" size={12} />
-                {statementFormat === 'remittance'
-                  ? 'Remittance & Negatives Statement (A4)'
-                  : statementFormat === 'deficits_rotations'
-                  ? 'Negatives Per Draw Statement (A4)'
-                  : '6-Draw Deficit Matrix (A4)'}
+                <span>Negatives Per Draw Audit Statement (A4)</span>
               </span>
               <span className="statement-preview-scale-pill">
                 Scale: <strong>{currentScale}%</strong>
               </span>
               <span className="statement-preview-agent-pill">
-                {displayedAgentCount} {displayedAgentCount === 1 ? 'Agent' : 'Agents'}
+                {displayedAgentCount} {displayedAgentCount === 1 ? 'Deficit Teller' : 'Deficit Tellers'}
               </span>
             </div>
             <div className="statement-preview-status-indicator">
@@ -1702,14 +1367,13 @@ function SupervisorStatementModal({
           <div className="statement-a4-page-frame">
             <SupervisorStatementTable
               group={group}
+              allSupervisors={allSupervisors}
               selectedDate={selectedDate}
               branchName={branchName}
               isModal={true}
               fitOnePage={fitOnePage}
               fontScale={currentScale}
               densityTier={densityTier}
-              statementFormat={statementFormat}
-              onlyDeficitTellers={onlyDeficitTellers}
             />
           </div>
         </div>
@@ -3130,7 +2794,7 @@ function App() {
                       </button>
                     </div>
                     {reportViewMode === 'statement' ? (
-                      <SupervisorStatementTable group={group} selectedDate={selectedDate} branchName={branchName} />
+                      <SupervisorStatementTable group={group} allSupervisors={supervisorReports} selectedDate={selectedDate} branchName={branchName} />
                     ) : (
                       <MatrixTable group={group} showOverall={showOverall} />
                     )}
