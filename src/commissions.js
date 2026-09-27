@@ -1,6 +1,8 @@
 // src/commissions.js - Hierarchical Commission Store & Calculation Service for Lucky Betplay Corporation
+import { saveSupabaseCommissionSettings } from './supabase.js'
 
 const COMMISSIONS_STORAGE_KEY = 'luckybet_commission_settings'
+const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined'
 
 export const DEFAULT_COMMISSION_CONFIG = {
   globalDefaultRate: 10.0, // Baseline 10%
@@ -11,6 +13,7 @@ export const DEFAULT_COMMISSION_CONFIG = {
  * Loads commission settings from localStorage with fallbacks
  */
 export function loadCommissionSettings() {
+  if (!isBrowser) return { ...DEFAULT_COMMISSION_CONFIG }
   try {
     const raw = localStorage.getItem(COMMISSIONS_STORAGE_KEY)
     if (!raw) return { ...DEFAULT_COMMISSION_CONFIG }
@@ -35,8 +38,16 @@ export function saveCommissionSettings(settings) {
       supervisors: settings.supervisors || {},
       updatedAt: new Date().toISOString(),
     }
-    localStorage.setItem(COMMISSIONS_STORAGE_KEY, JSON.stringify(payload))
-    window.dispatchEvent(new CustomEvent('luckybet_commissions_updated', { detail: payload }))
+    if (isBrowser) {
+      localStorage.setItem(COMMISSIONS_STORAGE_KEY, JSON.stringify(payload))
+      window.dispatchEvent(new CustomEvent('luckybet_commissions_updated', { detail: payload }))
+    }
+
+    // Asynchronously synchronize online to Supabase Cloud
+    saveSupabaseCommissionSettings(payload).catch((err) => {
+      console.warn('Supabase cloud commission settings sync failed:', err)
+    })
+
     return true
   } catch (err) {
     console.error('Failed to save commission settings:', err)

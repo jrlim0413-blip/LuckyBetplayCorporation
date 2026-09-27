@@ -8,6 +8,7 @@ import { loadCommissionSettings, getAgentCommissionRate } from './commissions'
 import {
   signOutFromSupabase,
   syncMatrixPermissionsFromSupabase,
+  syncCommissionSettingsFromSupabase,
   subscribeToMatrixRealtime,
   isSupabaseConfigured,
 } from './supabase'
@@ -2055,9 +2056,10 @@ function App() {
     }
     window.addEventListener('luckybet_rbac_change', handleRbacChange)
 
-    // 1. Initial sync of permissions from Supabase Cloud Matrix
+    // 1. Initial sync of permissions and commission settings from Supabase Cloud
     if (isSupabaseConfigured) {
       syncMatrixPermissionsFromSupabase().catch(() => {})
+      syncCommissionSettingsFromSupabase().catch(() => {})
     }
 
     // 2. Real-time subscription to cloud matrix toggles (Supabase Realtime Channel & Postgres changes)
@@ -2069,6 +2071,7 @@ function App() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isSupabaseConfigured) {
         syncMatrixPermissionsFromSupabase().catch(() => {})
+        syncCommissionSettingsFromSupabase().catch(() => {})
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -2077,6 +2080,7 @@ function App() {
     const syncInterval = setInterval(() => {
       if (isSupabaseConfigured) {
         syncMatrixPermissionsFromSupabase().catch(() => {})
+        syncCommissionSettingsFromSupabase().catch(() => {})
       }
     }, 30000)
 

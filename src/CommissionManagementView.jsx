@@ -9,6 +9,7 @@ import {
   removeAgentOverride,
   resetSupervisorOverrides,
 } from './commissions'
+import { isSupabaseConfigured, syncCommissionSettingsFromSupabase } from './supabase'
 import './CommissionManagementView.css'
 
 function SvgIcon({ name, size = 16, className = '' }) {
@@ -154,6 +155,13 @@ export default function CommissionManagementView({
     })
     setExpandedSupervisors(initialExpanded)
   }, [supervisors])
+
+  // Auto-sync latest commission settings from Supabase on mount
+  useEffect(() => {
+    if (isSupabaseConfigured) {
+      syncCommissionSettingsFromSupabase().catch(() => {})
+    }
+  }, [])
 
   // Listen to cross-component updates
   useEffect(() => {
@@ -330,6 +338,29 @@ export default function CommissionManagementView({
         </div>
 
         <div className="header-banner-right">
+          {isSupabaseConfigured && (
+            <div className="commissions-cloud-badge" title="Commission rates and agent overrides are saved live in Supabase Cloud">
+              <span className="sync-status-dot status-connected" />
+              <span>Cloud Synced Online</span>
+            </div>
+          )}
+          <button
+            type="button"
+            className="action-btn-outline calculator-toggle-btn"
+            onClick={async () => {
+              showToast('Syncing latest commission settings from Supabase Cloud...', 'info')
+              const res = await syncCommissionSettingsFromSupabase()
+              if (res.success) {
+                showToast('Commission rates & overrides synced from Supabase!')
+              } else {
+                showToast('Using local commission settings.', 'info')
+              }
+            }}
+            title="Synchronize latest commission settings from Supabase Cloud"
+          >
+            <SvgIcon name="refresh" size={15} />
+            <span>Sync Cloud</span>
+          </button>
           <button
             type="button"
             className="action-btn-outline calculator-toggle-btn"

@@ -296,8 +296,151 @@ export async function syncMatrixPermissionsFromSupabase() {
   }
 }
 
+export const COMMISSIONS_CONFIG_ID = 'commissions_config'
+export const COMMISSIONS_CONFIG_SYS_ID = '__sys_commissions_config__'
+
 /**
- * Subscribe to real-time matrix changes across all browsers and devices.
+ * Fetch hierarchical commission settings (supervisor default rates and individual agent overrides) from Supabase.
+ */
+export async function getSupabaseCommissionSettings() {
+  if (!supabase) return { success: false, error: 'Supabase client is not configured' }
+  try {
+    // 1. Try dedicated table first
+    const { data: tableData, error: tableErr } = await supabase
+      .from('rbac_matrix_config')
+      .select('config')
+      .eq('id', COMMISSIONS_CONFIG_ID)
+      .maybeSingle()
+
+    if (!tableErr && tableData?.config) {
+      return { success: true, settings: tableData.config, source: 'rbac_matrix_config' }
+    }
+
+    // 2. Fallback to system row in rbac_users
+    const { data: userData, error: userErr } = await supabase
+      .from(RBAC_TABLE_NAME)
+      .select('email')
+      .eq('id', COMMISSIONS_CONFIG_SYS_ID)
+      .maybeSingle()
+
+    if (!userErr && userData?.email) {
+      try {
+        const parsed = JSON.parse(userData.email)
+        return { success: true, settings: parsed, source: 'rbac_users_fallback' }
+      } catch (parseErr) {
+        console.warn('Failed to parse commission settings from fallback payload:', parseErr)
+      }
+    }
+
+    return { success: false, error: userErr?.message || tableErr?.message || 'No cloud commission settings found' }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Save hierarchical commission settings to Supabase.
+ */
+export async function saveSupabaseCommissionSettings(settings) {
+  if (!supabase) return { success: false, error: 'Supabase client is not configured' }
+  try {
+    const payload = {
+      globalDefaultRate: Number(settings.globalDefaultRate) || 10.0,
+      supervisors: settings.supervisors || {},
+      updatedAt: new Date().toISOString(),
+    }
+
+    let savedToTable = false
+
+    // 1. Attempt save to dedicated table
+    try {
+      const { error: tableErr } = await supabase
+        .from('rbac_matrix_config')
+        .upsert({
+          id: COMMISSIONS_CONFIG_ID,
+          config: payload,
+          updated_at: new Date().toISOString(),
+        })
+      if (!tableErr) savedToTable = true
+    } catch {}
+
+    // 2. Always save to fallback system row in rbac_users for 100% instant cloud availability
+    const sysRow = {
+      id: COMMISSIONS_CONFIG_SYS_ID,
+      username: COMMISSIONS_CONFIG_SYS_ID,
+      password: 'sys_protected_config_row',
+      name: 'Agent Commission Settings System Config',
+      role: 'system',
+      role_label: 'System Config',
+      branch: 'System',
+      status: 'system',
+      avatar: 'CM',
+      email: JSON.stringify(payload),
+    }
+
+    const { error: userErr } = await supabase
+      .from(RBAC_TABLE_NAME)
+      .upsert(sysRow, { onConflict: 'username' })
+
+    // 3. Broadcast real-time change to all connected clients
+    try {
+      if (realtimeChannelInstance) {
+        realtimeChannelInstance.send({
+          type: 'broadcast',
+          event: 'commissions_updated',
+          payload: { timestamp: Date.now() },
+        })
+      }
+    } catch {}
+
+    if (savedToTable || !userErr) {
+      return { success: true, source: savedToTable ? 'rbac_matrix_config' : 'rbac_users_fallback' }
+    }
+
+    return { success: false, error: userErr?.message }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Synchronize cloud commission settings from Supabase into local storage and trigger UI re-render.
+ */
+export async function syncCommissionSettingsFromSupabase() {
+  if (!isSupabaseConfigured) return { success: false, error: 'Supabase not configured' }
+  try {
+    const res = await getSupabaseCommissionSettings()
+    if (res.success && res.settings) {
+      const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined'
+      let changed = false
+
+      if (isBrowser) {
+        const currentRaw = localStorage.getItem('luckybet_commission_settings')
+        const newStr = JSON.stringify(res.settings)
+        if (currentRaw !== newStr) {
+          localStorage.setItem('luckybet_commission_settings', newStr)
+          changed = true
+        }
+
+        window.dispatchEvent(
+          new CustomEvent('luckybet_commissions_updated', {
+            detail: res.settings,
+            source: 'supabase_sync',
+          })
+        )
+      }
+
+      return { success: true, settings: res.settings, changed }
+    }
+    return { success: false, error: res.error }
+  } catch (err) {
+    console.warn('Syncing commission settings from Supabase failed:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Subscribe to real-time matrix & commission changes across all browsers and devices.
  */
 export function subscribeToMatrixRealtime(onUpdate) {
   if (!supabase) return () => {}
@@ -310,6 +453,9 @@ export function subscribeToMatrixRealtime(onUpdate) {
       .on('broadcast', { event: 'matrix_updated' }, () => {
         if (typeof onUpdate === 'function') onUpdate()
       })
+      .on('broadcast', { event: 'commissions_updated' }, () => {
+        syncCommissionSettingsFromSupabase().catch(() => {})
+      })
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: RBAC_TABLE_NAME },
@@ -321,13 +467,24 @@ export function subscribeToMatrixRealtime(onUpdate) {
           ) {
             if (typeof onUpdate === 'function') onUpdate()
           }
+          if (
+            payload?.new?.id === COMMISSIONS_CONFIG_SYS_ID ||
+            payload?.old?.id === COMMISSIONS_CONFIG_SYS_ID ||
+            payload?.new?.username === COMMISSIONS_CONFIG_SYS_ID
+          ) {
+            syncCommissionSettingsFromSupabase().catch(() => {})
+          }
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'rbac_matrix_config' },
-        () => {
-          if (typeof onUpdate === 'function') onUpdate()
+        (payload) => {
+          if (payload?.new?.id === COMMISSIONS_CONFIG_ID || payload?.old?.id === COMMISSIONS_CONFIG_ID) {
+            syncCommissionSettingsFromSupabase().catch(() => {})
+          } else {
+            if (typeof onUpdate === 'function') onUpdate()
+          }
         }
       )
       .subscribe()
