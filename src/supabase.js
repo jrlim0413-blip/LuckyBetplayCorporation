@@ -211,23 +211,27 @@ export async function saveSupabaseMatrixConfig(config) {
       }
     } catch {}
 
-    // 2. Always save to fallback system row in rbac_users for 100% instant cloud availability
-    const sysRow = {
-      id: MATRIX_CONFIG_SYS_ID,
-      username: MATRIX_CONFIG_SYS_ID,
-      password: 'sys_protected_config_row',
-      name: 'RBAC Permission Matrix System Config',
-      role: 'system',
-      role_label: 'System Config',
-      branch: 'System',
-      status: 'system',
-      avatar: 'CF',
-      email: JSON.stringify(payloadWithTimestamp),
-    }
+    // 2. Only fallback to system row in rbac_users if dedicated table is not present
+    let userErr = null
+    if (!savedToTable) {
+      const sysRow = {
+        id: MATRIX_CONFIG_SYS_ID,
+        username: MATRIX_CONFIG_SYS_ID,
+        password: 'sys_protected_config_row',
+        name: 'RBAC Permission Matrix System Config',
+        role: 'system',
+        role_label: 'System Config',
+        branch: 'System',
+        status: 'system',
+        avatar: 'CF',
+        email: JSON.stringify(payloadWithTimestamp),
+      }
 
-    const { error: userErr } = await supabase
-      .from(RBAC_TABLE_NAME)
-      .upsert(sysRow, { onConflict: 'username' })
+      const res = await supabase
+        .from(RBAC_TABLE_NAME)
+        .upsert(sysRow, { onConflict: 'username' })
+      userErr = res.error
+    }
 
     // 3. Broadcast real-time change to all connected clients
     try {
@@ -364,23 +368,27 @@ export async function saveSupabaseCommissionSettings(settings) {
       if (!tableErr) savedToTable = true
     } catch {}
 
-    // 2. Always save to fallback system row in rbac_users for 100% instant cloud availability
-    const sysRow = {
-      id: COMMISSIONS_CONFIG_SYS_ID,
-      username: COMMISSIONS_CONFIG_SYS_ID,
-      password: 'sys_protected_config_row',
-      name: 'Agent Commission Settings System Config',
-      role: 'system',
-      role_label: 'System Config',
-      branch: 'System',
-      status: 'system',
-      avatar: 'CM',
-      email: JSON.stringify(payload),
-    }
+    // 2. Only fallback to system row in rbac_users if dedicated table is not present
+    let userErr = null
+    if (!savedToTable) {
+      const sysRow = {
+        id: COMMISSIONS_CONFIG_SYS_ID,
+        username: COMMISSIONS_CONFIG_SYS_ID,
+        password: 'sys_protected_config_row',
+        name: 'Agent Commission Settings System Config',
+        role: 'system',
+        role_label: 'System Config',
+        branch: 'System',
+        status: 'system',
+        avatar: 'CM',
+        email: JSON.stringify(payload),
+      }
 
-    const { error: userErr } = await supabase
-      .from(RBAC_TABLE_NAME)
-      .upsert(sysRow, { onConflict: 'username' })
+      const res = await supabase
+        .from(RBAC_TABLE_NAME)
+        .upsert(sysRow, { onConflict: 'username' })
+      userErr = res.error
+    }
 
     // 3. Broadcast real-time change to all connected clients
     try {
