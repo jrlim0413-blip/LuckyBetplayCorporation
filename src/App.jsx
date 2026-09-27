@@ -758,7 +758,7 @@ function SupervisorStatementTable({
           <tbody>
             <tr className="statement-section-divider-row">
               <td colSpan={6} className="statement-section-heading-cell">
-                <strong>POSITIVE REMITTANCES (TO COLLECT / SOLVENT AGENTS):</strong>
+                <strong>POSITIVE REMITTANCES (TO COLLECT):</strong>
               </td>
             </tr>
 
@@ -830,7 +830,7 @@ function SupervisorStatementTable({
             {negative.length === 0 ? (
               <tr className="statement-empty-state-row">
                 <td colSpan={6} className="statement-empty-state-cell statement-clean-indicator">
-                  ✓ No negative deficit records — all {positive.length} agents are solvent with positive balances.
+                  ✓ No negative deficit records — all {positive.length} agents have positive balances.
                 </td>
               </tr>
             ) : (
@@ -1692,7 +1692,7 @@ function OverviewDashboard({
           <div className="overview-table-card-header">
             <div className="overview-table-title-group">
               <h3>Supervisor Remittance &amp; Performance Leaderboard</h3>
-              <p>Consolidated supervisor sales ranking, agent roster solvent status, and net remittance due</p>
+              <p>Consolidated supervisor sales ranking, agent roster balance status, and net remittance due</p>
             </div>
             <div className="table-header-controls">
               <div className="overview-search-box">
@@ -1715,13 +1715,13 @@ function OverviewDashboard({
                   const exportData = filteredSupervisors.map((s, idx) => ({
                     Rank: idx + 1,
                     Supervisor: s.supervisor,
-                    SolventAgents: s.solventCount,
+                    PositiveAgents: s.solventCount,
                     DeficitAgents: s.deficitCount,
                     TotalGross: s.totalGross,
                     TotalHits: s.totalHits,
                     Commission: s.commission,
                     NetRemittance: s.netRemittance,
-                    Status: s.netRemittance >= 0 ? 'Solvent' : 'Deficit',
+                    Status: s.netRemittance >= 0 ? 'Positive' : 'Deficit',
                   }))
                   downloadCsv(`LuckyBet_Supervisor_Leaderboard_${selectedDate}.csv`, exportData)
                 }}
@@ -1759,8 +1759,8 @@ function OverviewDashboard({
                       </td>
                       <td>
                         <div className="spvr-agent-pills">
-                          <span className="spvr-pill-solvent" title="Solvent Agents">
-                            {spvr.solventCount} Solvent
+                          <span className="spvr-pill-solvent" title="Agents with Positive Balance">
+                            {spvr.solventCount} Positive
                           </span>
                           {spvr.deficitCount > 0 && (
                             <span className="spvr-pill-deficit" title="Agents with Deficit">
@@ -1806,7 +1806,7 @@ function OverviewDashboard({
                   <td>
                     <div className="spvr-agent-pills">
                       <span className="spvr-pill-solvent">
-                        {supervisorReports.reduce((s, g) => s + g.agents.filter(a => (a.totalNet - (a.totalSalary !== undefined ? a.totalSalary : a.totalGross * 0.1)) >= 0).length, 0)} Solvent
+                        {supervisorReports.reduce((s, g) => s + g.agents.filter(a => (a.totalNet - (a.totalSalary !== undefined ? a.totalSalary : a.totalGross * 0.1)) >= 0).length, 0)} Positive
                       </span>
                       <span className="spvr-pill-deficit">
                         {supervisorReports.reduce((s, g) => s + g.agents.filter(a => (a.totalNet - (a.totalSalary !== undefined ? a.totalSalary : a.totalGross * 0.1)) < 0).length, 0)} Deficit
@@ -1884,7 +1884,7 @@ function OverviewDashboard({
 
             {deficitTellers.length === 0 ? (
               <div className="state-message" style={{ padding: '16px', fontSize: '12px' }}>
-                ✓ All active tellers are solvent with positive balances today.
+                ✓ All active tellers have positive balances today.
               </div>
             ) : (
               <div className="deficit-watchlist-list">

@@ -528,7 +528,7 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
                                 <strong>10:30 AM &amp; 2:00 PM</strong>
                                 <span>1st Draw Rotation</span>
                               </div>
-                              <span className="matrix-mini-badge solvent">SOLVENT • 99.4%</span>
+                              <span className="matrix-mini-badge solvent">BALANCED • 99.4%</span>
                             </div>
                             <div className="matrix-mini-item">
                               <div className="matrix-mini-time">
@@ -686,11 +686,11 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
               <div className="bento-desc-label">Turnover &amp; Draw Reconciliation</div>
               <div className="bento-segments-row" title="Continuous Draw Verification">
                 <div className="bento-seg-bars">
-                  <span className="seg-bar done" title="10:30 AM Draw - Solvent" />
-                  <span className="seg-bar done" title="2:00 PM Draw - Solvent" />
-                  <span className="seg-bar done" title="3:00 PM Draw - Solvent" />
-                  <span className="seg-bar done" title="5:00 PM Draw - Solvent" />
-                  <span className="seg-bar done" title="7:00 PM Draw - Solvent" />
+                  <span className="seg-bar done" title="10:30 AM Draw - Settled" />
+                  <span className="seg-bar done" title="2:00 PM Draw - Settled" />
+                  <span className="seg-bar done" title="3:00 PM Draw - Settled" />
+                  <span className="seg-bar done" title="5:00 PM Draw - Settled" />
+                  <span className="seg-bar done" title="7:00 PM Draw - Settled" />
                   <span className="seg-bar active-scan" title="9:00 PM Draw - In Progress" />
                 </div>
                 <span className="seg-count-text">6 Draws Verified</span>
