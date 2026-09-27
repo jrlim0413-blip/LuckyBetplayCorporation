@@ -4,6 +4,7 @@ import LoginPage from './LoginPage'
 import RbacManagementView from './RbacManagementView'
 import CommissionManagementView from './CommissionManagementView'
 import FacebookProfileDropdown from './FacebookProfileDropdown'
+import DeficitInspectorModal from './DeficitInspectorModal'
 import { loadCommissionSettings, getAgentCommissionRate } from './commissions'
 import {
   signOutFromSupabase,
@@ -1334,6 +1335,7 @@ function OverviewDashboard({
   loading,
   error,
   onViewStatement,
+  onInspectDeficits,
   rawRows = [],
   rawColumns = [],
   endpointLabel,
@@ -1387,7 +1389,7 @@ function OverviewDashboard({
     const list = supervisorReports.map((s) => {
       const commission = s.totalSalary !== undefined ? s.totalSalary : s.agents.reduce((sum, a) => sum + (a.totalSalary !== undefined ? a.totalSalary : a.totalGross * 0.1), 0)
       const netRemittance = s.totalNet - commission
-      const solventCount = s.agents.filter((a) => {
+      const positiveCount = s.agents.filter((a) => {
         const comm = a.totalSalary !== undefined ? a.totalSalary : (a.totalGross * ((a.commissionRate || 10) / 100))
         return (a.totalNet - comm) >= 0
       }).length
@@ -1398,7 +1400,7 @@ function OverviewDashboard({
       const payoutRate = s.totalGross > 0 ? ((s.totalHits / s.totalGross) * 100).toFixed(1) : '0.0'
       return {
         ...s,
-        solventCount,
+        positiveCount,
         deficitCount,
         commission,
         netRemittance,
@@ -1760,7 +1762,7 @@ function OverviewDashboard({
                       <td>
                         <div className="spvr-agent-pills">
                           <span className="spvr-pill-solvent" title="Agents with Positive Balance">
-                            {spvr.solventCount} Positive
+                            {spvr.positiveCount} Positive
                           </span>
                           {spvr.deficitCount > 0 && (
                             <span className="spvr-pill-deficit" title="Agents with Deficit">
@@ -1879,7 +1881,15 @@ function OverviewDashboard({
           <div className="analytics-card">
             <div className="analytics-card-header">
               <h4>Field Health &amp; Deficit Watchlist</h4>
-              <span className="date-tag past-tag">{deficitTellers.length} Deficit Tellers</span>
+              <button
+                type="button"
+                className="deficit-watchlist-header-badge"
+                onClick={onInspectDeficits}
+                title="Click to inspect all negative balances per draw, supervisor, and agent"
+              >
+                <Icon name="alert" size={12} />
+                <span>{deficitTellers.length} Deficit Tellers</span>
+              </button>
             </div>
 
             {deficitTellers.length === 0 ? (
@@ -1889,7 +1899,13 @@ function OverviewDashboard({
             ) : (
               <div className="deficit-watchlist-list">
                 {deficitTellers.slice(0, 5).map((agent, idx) => (
-                  <div key={idx} className="deficit-watch-row">
+                  <div
+                    key={idx}
+                    className="deficit-watch-row"
+                    onClick={onInspectDeficits}
+                    style={{ cursor: 'pointer' }}
+                    title="Click to view details in Deficit Inspector"
+                  >
                     <div>
                       <span className="deficit-watch-agent">{agent.teller}</span>
                       <span className="deficit-watch-spvr">({agent.supervisor})</span>
@@ -1900,10 +1916,19 @@ function OverviewDashboard({
                   </div>
                 ))}
                 {deficitTellers.length > 5 && (
-                  <small style={{ color: '#64748b', textAlign: 'center', marginTop: '4px' }}>
-                    + {deficitTellers.length - 5} more deficit tellers recorded in supervisor statements
+                  <small style={{ color: '#64748b', textAlign: 'center', marginTop: '4px', display: 'block' }}>
+                    + {deficitTellers.length - 5} more deficit tellers recorded
                   </small>
                 )}
+                <button
+                  type="button"
+                  className="deficit-view-all-action-btn"
+                  onClick={onInspectDeficits}
+                  title="Open Deficit & Negative Inspector per Draw and Supervisor"
+                >
+                  <Icon name="alert" size={13} />
+                  <span>Inspect All Negatives Per Draw &amp; Supervisor ({deficitTellers.length})</span>
+                </button>
               </div>
             )}
           </div>
@@ -1968,6 +1993,7 @@ function App() {
   const [showOverall, setShowOverall] = useState(false)
   const [reportViewMode, setReportViewMode] = useState('matrix')
   const [statementModalGroup, setStatementModalGroup] = useState(null)
+  const [isDeficitModalOpen, setIsDeficitModalOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('luckybet_user') || sessionStorage.getItem('luckybet_user')
@@ -2248,6 +2274,17 @@ function App() {
   const drawRows = rows.filter((row) => row && row.drawTime !== undefined)
   const supervisorReports = getSupervisorReports(drawRows, supervisorRows, commissionSettings)
 
+  const deficitTellersCount = useMemo(() => {
+    let count = 0
+    supervisorReports.forEach((s) => {
+      s.agents.forEach((a) => {
+        const comm = a.totalSalary !== undefined ? a.totalSalary : a.totalGross * ((a.commissionRate || 10) / 100)
+        if (a.totalNet - comm < 0) count++
+      })
+    })
+    return count
+  }, [supervisorReports])
+
   const activeSupervisor = (selectedSupervisor !== 'all' && supervisorReports.some((group) => group.supervisor === selectedSupervisor))
     ? selectedSupervisor
     : 'all'
@@ -2370,6 +2407,18 @@ function App() {
           <div className="topbar-actions">
             <span className="date-label">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Connecting...'}</span>
             <button className="refresh-button" type="button" onClick={() => loadReport(selectedDate)} disabled={loading}><Icon name="refresh" size={15} /> {loading ? 'Loading' : 'Refresh'}</button>
+            <button
+              className="deficit-topbar-trigger-btn"
+              type="button"
+              onClick={() => setIsDeficitModalOpen(true)}
+              title="Open Deficit & Negative Balance Inspector (Per Draw, Supervisor, Agent)"
+            >
+              <Icon name="alert" size={14} />
+              <span>Negative Inspector</span>
+              {deficitTellersCount > 0 && (
+                <span className="deficit-topbar-pill">{deficitTellersCount}</span>
+              )}
+            </button>
             <FacebookProfileDropdown
               currentUser={currentUser}
               allUsers={getRbacUsers()}
@@ -2505,6 +2554,7 @@ function App() {
                 loading={loading}
                 error={error}
                 onViewStatement={(group) => setStatementModalGroup(group)}
+                onInspectDeficits={() => setIsDeficitModalOpen(true)}
                 rawRows={rows}
                 rawColumns={columns}
                 endpointLabel={endpointLabel}
@@ -2623,30 +2673,42 @@ function App() {
                       </div>
 
                       {supervisorReports.length > 0 && (
-                        <button
-                          type="button"
-                          className={`supervisor-statement-top-btn ${!can('print_statements') ? 'is-perm-locked' : ''}`}
-                          onClick={() => {
-                            if (!can('print_statements')) {
-                              alert(`Access Restricted: Printing statements is locked for @${currentUser?.username || 'user'} in the Role Matrix.`)
-                              return
-                            }
-                            const target = activeSupervisor !== 'all'
-                              ? (supervisorReports.find((g) => g.supervisor === activeSupervisor) ?? supervisorReports[0])
-                              : {
-                                  supervisor: 'ALL SUPERVISORS (CONSOLIDATED)',
-                                  agents: supervisorReports.flatMap((s) => s.agents.map((a) => ({
-                                    ...a,
-                                    teller: `${a.teller} (${s.supervisor})`,
-                                  }))),
-                                }
-                            if (target) setStatementModalGroup(target)
-                          }}
-                          title={can('print_statements') ? "View and print official balance sheet remittance statement on A4 bond paper" : "Printing statements is locked for your account in the Role Matrix"}
-                        >
-                          <Icon name={can('print_statements') ? "print" : "lock"} size={13} />
-                          <span>{can('print_statements') ? "Print Statement (A4)" : "Print Locked"}</span>
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="supervisor-statement-top-btn deficit-inspector-btn"
+                            onClick={() => setIsDeficitModalOpen(true)}
+                            title="Inspect all negative balances and deficits per draw, supervisor, and agent"
+                          >
+                            <Icon name="alert" size={13} />
+                            <span>Negative Inspector</span>
+                            {deficitTellersCount > 0 && <span className="deficit-topbar-pill">{deficitTellersCount}</span>}
+                          </button>
+                          <button
+                            type="button"
+                            className={`supervisor-statement-top-btn ${!can('print_statements') ? 'is-perm-locked' : ''}`}
+                            onClick={() => {
+                              if (!can('print_statements')) {
+                                alert(`Access Restricted: Printing statements is locked for @${currentUser?.username || 'user'} in the Role Matrix.`)
+                                return
+                              }
+                              const target = activeSupervisor !== 'all'
+                                ? (supervisorReports.find((g) => g.supervisor === activeSupervisor) ?? supervisorReports[0])
+                                : {
+                                    supervisor: 'ALL SUPERVISORS (CONSOLIDATED)',
+                                    agents: supervisorReports.flatMap((s) => s.agents.map((a) => ({
+                                      ...a,
+                                      teller: `${a.teller} (${s.supervisor})`,
+                                    }))),
+                                  }
+                              if (target) setStatementModalGroup(target)
+                            }}
+                            title={can('print_statements') ? "View and print official balance sheet remittance statement on A4 bond paper" : "Printing statements is locked for your account in the Role Matrix"}
+                          >
+                            <Icon name={can('print_statements') ? "print" : "lock"} size={13} />
+                            <span>{can('print_statements') ? "Print Statement (A4)" : "Print Locked"}</span>
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -2742,6 +2804,18 @@ function App() {
           onSelectSupervisor={(newGroup) => setStatementModalGroup(newGroup)}
           canPrint={can('print_statements')}
           currentUser={currentUser}
+        />
+      )}
+
+      {isDeficitModalOpen && (
+        <DeficitInspectorModal
+          isOpen={isDeficitModalOpen}
+          onClose={() => setIsDeficitModalOpen(false)}
+          supervisorReports={supervisorReports}
+          drawGroups={drawGroups}
+          selectedDate={selectedDate}
+          branchName={branchName}
+          canPrint={can('print_statements')}
         />
       )}
     </div>
