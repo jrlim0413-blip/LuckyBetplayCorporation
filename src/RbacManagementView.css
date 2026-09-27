@@ -1344,6 +1344,27 @@
   box-shadow: 0 0 6px #16a34a;
 }
 
+.rbac-cloud-matrix-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: #f0fdf4;
+  color: #15803d;
+  letter-spacing: 0.02em;
+}
+
+[data-theme='dark'] .rbac-cloud-matrix-badge {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #4ade80;
+}
+
 .sync-status-dot.status-table_missing {
   background: #f59e0b;
   box-shadow: 0 0 6px #f59e0b;

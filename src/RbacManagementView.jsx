@@ -28,6 +28,9 @@ import {
   getSupabaseRbacUsers,
   saveRbacUserToSupabase,
   deleteRbacUserFromSupabase,
+  syncMatrixPermissionsFromSupabase,
+  saveSupabaseMatrixConfig,
+  subscribeToMatrixRealtime,
 } from './supabase'
 
 const SQL_SCRIPT_TEXT = `-- Dedicated rbac_users table for Cloud Directory
@@ -46,11 +49,26 @@ CREATE TABLE IF NOT EXISTS public.rbac_users (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Dedicated table for Cloud Role Permission Matrix & Account Capabilities
+CREATE TABLE IF NOT EXISTS public.rbac_matrix_config (
+  id TEXT PRIMARY KEY,
+  config JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 ALTER TABLE public.rbac_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rbac_matrix_config ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow anon full access to rbac_users" ON public.rbac_users;
 CREATE POLICY "Allow anon full access to rbac_users"
 ON public.rbac_users
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow anon full access to rbac_matrix_config" ON public.rbac_matrix_config;
+CREATE POLICY "Allow anon full access to rbac_matrix_config"
+ON public.rbac_matrix_config
 FOR ALL
 USING (true)
 WITH CHECK (true);
@@ -258,9 +276,16 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
   const [supabaseSyncStatus, setSupabaseSyncStatus] = useState('idle') // 'idle' | 'syncing' | 'connected' | 'table_missing' | 'error'
   const [showSqlModal, setShowSqlModal] = useState(false)
 
-  // Fetch users from Supabase table on mount
+  // Fetch users and sync matrix permissions from Supabase table on mount
   useEffect(() => {
     if (!isSupabaseConfigured) return
+
+    // Pre-sync matrix permissions from Supabase
+    syncMatrixPermissionsFromSupabase().catch(() => {})
+
+    const unsubRealtime = subscribeToMatrixRealtime(() => {
+      syncMatrixPermissionsFromSupabase().catch(() => {})
+    })
 
     setSupabaseSyncStatus('syncing')
     getSupabaseRbacUsers()
@@ -298,6 +323,10 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
       .catch(() => {
         setSupabaseSyncStatus('error')
       })
+
+    return () => {
+      if (typeof unsubRealtime === 'function') unsubRealtime()
+    }
   }, [])
 
   // New User Form State
@@ -1229,6 +1258,29 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
               </p>
             </div>
             <div className="rbac-matrix-header-right">
+              {isSupabaseConfigured && (
+                <div className="rbac-cloud-matrix-badge" title="Role and account permissions are synced live in Supabase Cloud">
+                  <span className="sync-status-dot status-connected" />
+                  <span>Cloud Synced Online</span>
+                </div>
+              )}
+              <button
+                type="button"
+                className="rbac-secondary-btn"
+                onClick={async () => {
+                  showNotification('Syncing latest permissions from Supabase Cloud...', 'info', 'Cloud Sync')
+                  const res = await syncMatrixPermissionsFromSupabase()
+                  if (res.success) {
+                    showNotification('Cloud permissions successfully synced and applied!', 'success', 'Synced')
+                  } else {
+                    showNotification('Using cached local permissions.', 'info', 'Sync Status')
+                  }
+                }}
+                title="Synchronize latest permissions from Supabase Cloud"
+              >
+                <SvgIcon name="refresh" size={14} />
+                <span>Sync Cloud</span>
+              </button>
               <button
                 type="button"
                 className="rbac-secondary-btn"

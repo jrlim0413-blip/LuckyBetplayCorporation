@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { verifyUserCredentials, getDeletedUsernames } from './rbac'
+import { verifyUserCredentials, getDeletedUsernames, getUserEffectivePermissions } from './rbac'
 import {
   isSupabaseConfigured,
   verifyCredentialsInSupabaseTable,
+  syncMatrixPermissionsFromSupabase,
   signInWithSupabase,
   signUpWithSupabase,
   formatSupabaseEmail,
@@ -189,6 +190,13 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
     return () => clearInterval(autoPlayRef.current)
   }, [isPaused, loginSuccessState, slides.length])
 
+  // Pre-sync cloud matrix permissions on login screen load
+  useEffect(() => {
+    if (isSupabaseConfigured) {
+      syncMatrixPermissionsFromSupabase().catch(() => {})
+    }
+  }, [])
+
   const handleNextSlide = () => {
     setActiveSlide((prev) => (prev + 1) % slides.length)
   }
@@ -221,8 +229,11 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
         try {
           const tableResult = await verifyCredentialsInSupabaseTable(cleanUsername, cleanPassword)
           if (tableResult.success && tableResult.account) {
+            // First sync latest matrix permissions from Supabase to ensure non-admin tabs are available
+            await syncMatrixPermissionsFromSupabase().catch(() => {})
             const acc = tableResult.account
             const isAdmin = acc.role === 'admin' || cleanUsername.toLowerCase().includes('admin')
+            const effectivePerms = getUserEffectivePermissions({ username: acc.username, role: acc.role })
             loginSuccess = true
             authUser = {
               id: acc.id,
@@ -233,6 +244,7 @@ export default function LoginPage({ onLoginSuccess, branchName = 'Mandaue' }) {
               branch: acc.branch || branchName,
               token: configuredToken || 'rbac-token-' + acc.id,
               provider: 'supabase_table',
+              permissions: effectivePerms,
               loginTime: new Date().toISOString(),
             }
           } else if (tableResult.wrongPassword) {

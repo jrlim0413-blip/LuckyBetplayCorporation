@@ -1,4 +1,5 @@
 // src/rbac.js - Role-Based Access Control (RBAC) & Credential Store for Lucky Betplay Corporation
+import { saveSupabaseMatrixConfig } from './supabase.js'
 
 const USERS_STORAGE_KEY = 'luckybet_rbac_users'
 const ROLES_STORAGE_KEY = 'luckybet_rbac_roles'
@@ -278,6 +279,14 @@ export function saveRbacRoles(roles) {
   try {
     localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles))
     window.dispatchEvent(new CustomEvent('luckybet_rbac_change', { detail: { roles } }))
+
+    // Asynchronously synchronize online to Supabase Cloud Matrix
+    saveSupabaseMatrixConfig({
+      roles,
+      userPerms: getUserCustomPermissionsMap(),
+    }).catch((err) => {
+      console.warn('Supabase cloud roles sync failed:', err)
+    })
   } catch (err) {
     console.error('Failed to save roles to localStorage:', err)
   }
@@ -299,6 +308,14 @@ export function saveUserCustomPermissionsMap(map) {
   try {
     localStorage.setItem(USER_PERMS_KEY, JSON.stringify(map))
     window.dispatchEvent(new CustomEvent('luckybet_rbac_change', { detail: { userPerms: map } }))
+
+    // Asynchronously synchronize online to Supabase Cloud Matrix
+    saveSupabaseMatrixConfig({
+      roles: getRbacRoles(),
+      userPerms: map,
+    }).catch((err) => {
+      console.warn('Supabase cloud user perms sync failed:', err)
+    })
   } catch (err) {
     console.error('Failed to save user custom permissions:', err)
   }

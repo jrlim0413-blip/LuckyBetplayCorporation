@@ -5,7 +5,12 @@ import RbacManagementView from './RbacManagementView'
 import CommissionManagementView from './CommissionManagementView'
 import FacebookProfileDropdown from './FacebookProfileDropdown'
 import { loadCommissionSettings, getAgentCommissionRate } from './commissions'
-import { signOutFromSupabase } from './supabase'
+import {
+  signOutFromSupabase,
+  syncMatrixPermissionsFromSupabase,
+  subscribeToMatrixRealtime,
+  isSupabaseConfigured,
+} from './supabase'
 import {
   getRbacRoles,
   getRbacUsers,
@@ -2049,7 +2054,38 @@ function App() {
       setRbacRev((r) => r + 1)
     }
     window.addEventListener('luckybet_rbac_change', handleRbacChange)
-    return () => window.removeEventListener('luckybet_rbac_change', handleRbacChange)
+
+    // 1. Initial sync of permissions from Supabase Cloud Matrix
+    if (isSupabaseConfigured) {
+      syncMatrixPermissionsFromSupabase().catch(() => {})
+    }
+
+    // 2. Real-time subscription to cloud matrix toggles (Supabase Realtime Channel & Postgres changes)
+    const unsubRealtime = subscribeToMatrixRealtime(() => {
+      syncMatrixPermissionsFromSupabase().catch(() => {})
+    })
+
+    // 3. Sync whenever the tab/window gains focus or becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isSupabaseConfigured) {
+        syncMatrixPermissionsFromSupabase().catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // 4. Periodic polling safety check (every 30 seconds)
+    const syncInterval = setInterval(() => {
+      if (isSupabaseConfigured) {
+        syncMatrixPermissionsFromSupabase().catch(() => {})
+      }
+    }, 30000)
+
+    return () => {
+      window.removeEventListener('luckybet_rbac_change', handleRbacChange)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      clearInterval(syncInterval)
+      if (typeof unsubRealtime === 'function') unsubRealtime()
+    }
   }, [])
 
   // Calculate dynamic effective capabilities for currentUser depending on account and matrix toggles

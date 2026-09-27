@@ -49,6 +49,14 @@ export async function verifyCredentialsInSupabaseTable(username, password) {
   const cleanUser = String(username || '').trim().toLowerCase()
   const cleanPass = String(password || '').trim()
 
+  if (cleanUser.startsWith('__')) {
+    return {
+      success: false,
+      notFound: true,
+      error: 'Invalid username credentials.',
+    }
+  }
+
   try {
     const { data, error } = await supabase
       .from(RBAC_TABLE_NAME)
@@ -81,7 +89,7 @@ export async function verifyCredentialsInSupabaseTable(username, password) {
     const account = data[0]
 
     // Account status check
-    if (account.status === 'suspended' || account.status === 'inactive') {
+    if (account.status === 'suspended' || account.status === 'inactive' || account.status === 'system') {
       return {
         success: false,
         inactive: true,
@@ -129,6 +137,215 @@ export async function verifyCredentialsInSupabaseTable(username, password) {
   }
 }
 
+export const MATRIX_CONFIG_ID = 'matrix_config'
+export const MATRIX_CONFIG_SYS_ID = '__sys_matrix_config__'
+export const MATRIX_REALTIME_CHANNEL = 'rbac-matrix-realtime'
+
+let realtimeChannelInstance = null
+
+/**
+ * Fetch matrix configuration (role permissions and user custom permissions) from Supabase.
+ * Checks dedicated 'rbac_matrix_config' table first; falls back to system row in 'rbac_users'.
+ */
+export async function getSupabaseMatrixConfig() {
+  if (!supabase) return { success: false, error: 'Supabase client is not configured' }
+  try {
+    // 1. Try dedicated table first
+    const { data: tableData, error: tableErr } = await supabase
+      .from('rbac_matrix_config')
+      .select('config')
+      .eq('id', MATRIX_CONFIG_ID)
+      .maybeSingle()
+
+    if (!tableErr && tableData?.config) {
+      return { success: true, config: tableData.config, source: 'rbac_matrix_config' }
+    }
+
+    // 2. Fallback to protected system row in rbac_users
+    const { data: userData, error: userErr } = await supabase
+      .from(RBAC_TABLE_NAME)
+      .select('email')
+      .eq('id', MATRIX_CONFIG_SYS_ID)
+      .maybeSingle()
+
+    if (!userErr && userData?.email) {
+      try {
+        const parsed = JSON.parse(userData.email)
+        return { success: true, config: parsed, source: 'rbac_users_fallback' }
+      } catch (parseErr) {
+        console.warn('Failed to parse matrix config from fallback email payload:', parseErr)
+      }
+    }
+
+    return { success: false, error: userErr?.message || tableErr?.message || 'No cloud matrix found' }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Save matrix configuration (roles permissions + user custom permissions) to Supabase.
+ * Saves to both dedicated table (if present) and fallback system row in rbac_users.
+ */
+export async function saveSupabaseMatrixConfig(config) {
+  if (!supabase) return { success: false, error: 'Supabase client is not configured' }
+  try {
+    const payloadWithTimestamp = {
+      ...config,
+      updatedAt: new Date().toISOString(),
+    }
+
+    let savedToTable = false
+
+    // 1. Attempt save to dedicated table
+    try {
+      const { error: tableErr } = await supabase
+        .from('rbac_matrix_config')
+        .upsert({
+          id: MATRIX_CONFIG_ID,
+          config: payloadWithTimestamp,
+          updated_at: new Date().toISOString(),
+        })
+      if (!tableErr) {
+        savedToTable = true
+      }
+    } catch {}
+
+    // 2. Always save to fallback system row in rbac_users for 100% instant cloud availability
+    const sysRow = {
+      id: MATRIX_CONFIG_SYS_ID,
+      username: MATRIX_CONFIG_SYS_ID,
+      password: 'sys_protected_config_row',
+      name: 'RBAC Permission Matrix System Config',
+      role: 'system',
+      role_label: 'System Config',
+      branch: 'System',
+      status: 'system',
+      avatar: 'CF',
+      email: JSON.stringify(payloadWithTimestamp),
+    }
+
+    const { error: userErr } = await supabase
+      .from(RBAC_TABLE_NAME)
+      .upsert(sysRow, { onConflict: 'username' })
+
+    // 3. Broadcast real-time change to all connected clients
+    try {
+      if (realtimeChannelInstance) {
+        realtimeChannelInstance.send({
+          type: 'broadcast',
+          event: 'matrix_updated',
+          payload: { timestamp: Date.now() },
+        })
+      }
+    } catch {}
+
+    if (savedToTable || !userErr) {
+      return { success: true, source: savedToTable ? 'rbac_matrix_config' : 'rbac_users_fallback' }
+    }
+
+    return { success: false, error: userErr?.message }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Synchronize cloud matrix permissions from Supabase into local storage and trigger UI re-render.
+ */
+export async function syncMatrixPermissionsFromSupabase() {
+  if (!isSupabaseConfigured) return { success: false, error: 'Supabase not configured' }
+  try {
+    const res = await getSupabaseMatrixConfig()
+    if (res.success && res.config) {
+      const { roles, userPerms } = res.config
+      let changed = false
+
+      if (roles && typeof roles === 'object') {
+        const currentRolesRaw = localStorage.getItem('luckybet_rbac_roles')
+        const newRolesStr = JSON.stringify(roles)
+        if (currentRolesRaw !== newRolesStr) {
+          localStorage.setItem('luckybet_rbac_roles', newRolesStr)
+          changed = true
+        }
+      }
+
+      if (userPerms && typeof userPerms === 'object') {
+        const currentUserPermsRaw = localStorage.getItem('luckybet_rbac_user_perms')
+        const newUserPermsStr = JSON.stringify(userPerms)
+        if (currentUserPermsRaw !== newUserPermsStr) {
+          localStorage.setItem('luckybet_rbac_user_perms', newUserPermsStr)
+          changed = true
+        }
+      }
+
+      if (changed) {
+        window.dispatchEvent(
+          new CustomEvent('luckybet_rbac_change', {
+            detail: { roles, userPerms, source: 'supabase_sync' },
+          })
+        )
+      }
+
+      return { success: true, config: res.config, changed }
+    }
+    return { success: false, error: res.error }
+  } catch (err) {
+    console.warn('Syncing matrix permissions from Supabase failed:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Subscribe to real-time matrix changes across all browsers and devices.
+ */
+export function subscribeToMatrixRealtime(onUpdate) {
+  if (!supabase) return () => {}
+
+  try {
+    const channel = supabase.channel(MATRIX_REALTIME_CHANNEL)
+    realtimeChannelInstance = channel
+
+    channel
+      .on('broadcast', { event: 'matrix_updated' }, () => {
+        if (typeof onUpdate === 'function') onUpdate()
+      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: RBAC_TABLE_NAME },
+        (payload) => {
+          if (
+            payload?.new?.id === MATRIX_CONFIG_SYS_ID ||
+            payload?.old?.id === MATRIX_CONFIG_SYS_ID ||
+            payload?.new?.username === MATRIX_CONFIG_SYS_ID
+          ) {
+            if (typeof onUpdate === 'function') onUpdate()
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rbac_matrix_config' },
+        () => {
+          if (typeof onUpdate === 'function') onUpdate()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      try {
+        supabase.removeChannel(channel)
+        if (realtimeChannelInstance === channel) {
+          realtimeChannelInstance = null
+        }
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('Realtime subscription setup error:', err)
+    return () => {}
+  }
+}
+
 /**
  * Fetch all authorized accounts from Supabase 'rbac_users' table.
  */
@@ -149,20 +366,28 @@ export async function getSupabaseRbacUsers() {
       }
     }
 
-    const normalized = (data || []).map((row) => ({
-      id: row.id,
-      username: row.username,
-      password: row.password,
-      name: row.name,
-      role: row.role,
-      roleLabel: row.role_label,
-      branch: row.branch,
-      status: row.status,
-      avatar: row.avatar,
-      email: row.email,
-      lastLogin: row.last_login ? new Date(row.last_login).toLocaleString() : 'Never',
-      createdAt: row.created_at ? row.created_at.split('T')[0] : '',
-    }))
+    // Exclude protected system configuration rows
+    const normalized = (data || [])
+      .filter(
+        (row) =>
+          !String(row.id || '').startsWith('__') &&
+          row.status !== 'system' &&
+          !String(row.username || '').startsWith('__')
+      )
+      .map((row) => ({
+        id: row.id,
+        username: row.username,
+        password: row.password,
+        name: row.name,
+        role: row.role,
+        roleLabel: row.role_label,
+        branch: row.branch,
+        status: row.status,
+        avatar: row.avatar,
+        email: row.email,
+        lastLogin: row.last_login ? new Date(row.last_login).toLocaleString() : 'Never',
+        createdAt: row.created_at ? row.created_at.split('T')[0] : '',
+      }))
 
     return { success: true, data: normalized }
   } catch (err) {
@@ -211,6 +436,10 @@ export async function deleteRbacUserFromSupabase(id, username) {
   try {
     const cleanUser = username ? String(username).trim().toLowerCase() : ''
     const cleanId = id ? String(id).trim() : ''
+
+    if (cleanUser.startsWith('__') || cleanId.startsWith('__')) {
+      return { success: false, error: 'Protected system row cannot be deleted' }
+    }
 
     let query = supabase.from(RBAC_TABLE_NAME).delete()
     if (cleanId && cleanUser) {
