@@ -3557,6 +3557,121 @@ body[data-theme="dark"] {
   color: #ffffff;
 }
 
+/* ==========================================================================
+   STATEMENT DRAW DEFICITS BREAKDOWN (PRINT STATEMENT FORMATS)
+   ========================================================================== */
+
+.statement-format-pills {
+  display: inline-flex;
+  background: #e2e8f0;
+  padding: 2px;
+  border-radius: 8px;
+  gap: 2px;
+}
+
+.statement-format-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: #475569;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.statement-format-btn:hover {
+  color: #0f172a;
+}
+
+.statement-format-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.statement-deficit-only-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #b91c1c;
+  cursor: pointer;
+  margin-left: 6px;
+}
+
+.statement-deficit-only-toggle input {
+  cursor: pointer;
+}
+
+.statement-neg-th-row th {
+  background: #fef2f2 !important;
+  color: #991b1b !important;
+  border-bottom: 1.5px solid #fca5a5 !important;
+  font-size: 10px !important;
+  letter-spacing: 0.03em;
+}
+
+.statement-neg-draw-th {
+  color: #b91c1c !important;
+}
+
+.statement-clean-dash {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.statement-times-matrix-table th.statement-th-num,
+.statement-times-matrix-table td.statement-num-td {
+  width: auto !important;
+  font-size: 9.5px !important;
+}
+
+/* Print specific for Draw Deficits Table */
+@media print {
+  .statement-format-pills,
+  .statement-deficit-only-toggle {
+    display: none !important;
+  }
+
+  .statement-neg-th-row th {
+    background: #fef2f2 !important;
+    color: #991b1b !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+/* Dark mode overrides */
+[data-theme="dark"] .statement-format-pills {
+  background: #18191a;
+}
+
+[data-theme="dark"] .statement-format-btn {
+  color: #b0b3b8;
+}
+
+[data-theme="dark"] .statement-format-btn.active {
+  background: #3a3b3c;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .statement-neg-th-row th {
+  background: #2a1215 !important;
+  color: #fca5a5 !important;
+  border-bottom-color: #7f1d1d !important;
+}
+
+[data-theme="dark"] .statement-clean-dash {
+  color: #64748b;
+}
+
+
 
 
 
