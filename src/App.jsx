@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import LoginPage from './LoginPage'
 import RbacManagementView from './RbacManagementView'
 import CommissionManagementView from './CommissionManagementView'
 import FacebookProfileDropdown from './FacebookProfileDropdown'
 import DeficitInspectorModal from './DeficitInspectorModal'
+import DrawDeficitsExcelStatement from './DrawDeficitsExcelStatement'
 import { loadCommissionSettings, getAgentCommissionRate } from './commissions'
 import {
   signOutFromSupabase,
@@ -674,25 +675,28 @@ function calculateMetricsTotals(list = []) {
   )
 }
 
-function calculateAutoFitScale(agentCount) {
-  // Golden Rule: Guarantee strictly 1 A4 bond paper sheet (margin: 1.2cm 2cm 1.2cm 2cm)
-  // Safe single-sheet printable budget is ~960px.
-  // Base fixed elements (sagad sa taas header, subtotals, grand total, signatures): ~290px.
-  // Each agent row takes ~20px in print.
-  const estimatedHeight = 290 + (agentCount * 20)
-  const printableBudget = 960
+// Paper budgets at 96dpi (px), for auto-fit calculations
+const PAPER_BUDGETS = {
+  longBond: { w: 756, h: 1188 }, // 8.5in × 13in @ 96dpi minus 4mm margins
+  a4:       { w: 756, h: 1026 }, // 8.27in × 11.69in @ 96dpi minus 4mm margins
+}
 
-  if (estimatedHeight <= printableBudget) {
-    return 100
-  }
-
-  // Exact scale to strictly fit everything onto 1 sheet of bond paper:
-  const exactScale = Math.floor((printableBudget / estimatedHeight) * 100)
-  return Math.min(100, Math.max(65, exactScale))
+function calculateAutoFitScale(agentCount, paperType = 'longBond') {
+  // Fallback estimate used only before DOM measurement is available
+  const budget = PAPER_BUDGETS[paperType] || PAPER_BUDGETS.longBond
+  // Fixed chrome: header ~80px, meta ~22px, th ~24px, 2 section headers ~40px,
+  // 2 subtotal rows ~36px, grand total ~28px, spacers ~16px, draw deficits ~200px, sigs ~80px, footer ~20px
+  const fixedPx = 546
+  const rowPx = 17 // compact row height
+  const estimatedHeight = fixedPx + agentCount * rowPx
+  if (estimatedHeight <= budget.h) return 100
+  const exact = Math.floor((budget.h / estimatedHeight) * 100)
+  return Math.min(100, Math.max(55, exact))
 }
 
 function SupervisorStatementTable({
   group,
+  allSupervisors = [],
   selectedDate,
   branchName = configuredBranch,
   isModal = false,
@@ -711,26 +715,77 @@ function SupervisorStatementTable({
     netSales: positiveTotals.netSales + negativeTotals.netSales,
   }
 
-  const effectiveScale = fitOnePage ? (fontScale || 100) : 100
-  const scaleStyle = fitOnePage && effectiveScale !== 100
-    ? {
-        '--statement-scale': (effectiveScale / 100).toFixed(3),
-        zoom: `${effectiveScale}%`,
-      }
-    : {
-        '--statement-scale': '1',
-      }
+  // ─── Real DOM auto-fit ────────────────────────────────────────────────────
+  const sheetRef = useRef(null)
+  const wrapRef  = useRef(null)
+  const [computedScale, setComputedScale] = useState(fitOnePage ? (fontScale || 100) : 100)
+
+  useLayoutEffect(() => {
+    if (!fitOnePage || !sheetRef.current || !wrapRef.current) return
+
+    let raf = 0
+    const measureFit = () => {
+      cancelAnimationFrame(raf)
+      sheetRef.current.style.transform = ''
+      sheetRef.current.style.transformOrigin = ''
+      sheetRef.current.style.width = ''
+
+      raf = requestAnimationFrame(() => {
+      const contentH = sheetRef.current?.scrollHeight || 0
+      const contentW = sheetRef.current?.scrollWidth  || 0
+      const wrapW    = wrapRef.current?.clientWidth   || 800
+
+      // Determine available print height from @page or use Long Bond as default
+      // Long Bond = 13in - 8mm margins ≈ 1188px @ 96dpi
+      const availH = PAPER_BUDGETS.longBond.h
+      const availW = wrapW
+
+      const scaleH = availH / contentH
+      const scaleW = availW / contentW
+      const scale  = Math.min(scaleH, scaleW, 1) // never upscale past 100%
+
+      const pct = Math.max(55, Math.floor(scale * 100))
+      setComputedScale(pct)
+      })
+    }
+
+    measureFit()
+    const resizeObserver = new ResizeObserver(measureFit)
+    resizeObserver.observe(wrapRef.current)
+    return () => {
+      cancelAnimationFrame(raf)
+      resizeObserver.disconnect()
+    }
+  // Re-run when agent list changes or group changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitOnePage, group?.agents?.length, group?.supervisor])
+
+  // Apply computed scale via CSS transform (more reliable than zoom across browsers/print)
+  useLayoutEffect(() => {
+    if (!fitOnePage || !sheetRef.current) return
+    if (computedScale < 100) {
+      const s = (computedScale / 100).toFixed(4)
+      sheetRef.current.style.transformOrigin = 'top left'
+      sheetRef.current.style.transform = `scale(${s})`
+      // Expand wrapper to compensate so siblings aren't pushed
+      sheetRef.current.style.width = `${(100 / (computedScale / 100)).toFixed(2)}%`
+    } else {
+      sheetRef.current.style.transform = ''
+      sheetRef.current.style.transformOrigin = ''
+      sheetRef.current.style.width = ''
+    }
+  }, [computedScale, fitOnePage])
 
   return (
+    <div ref={wrapRef} style={{ overflow: 'hidden', width: '100%', position: 'relative' }}>
     <div
-      className={`statement-sheet ${isModal ? 'statement-sheet-modal' : 'statement-sheet-inline'} ${fitOnePage ? 'a4-single-page-fit' : ''} ${densityTier}`}
-      style={scaleStyle}
+      ref={sheetRef}
+      className={`statement-sheet ${isModal ? 'statement-sheet-modal' : 'statement-sheet-inline'} ${fitOnePage ? 'a4-single-page-fit' : ''}`}
+      style={{ display: 'block', boxSizing: 'border-box' }}
     >
+      {/* ── FULL-WIDTH HEADER ─────────────────────────────────────── */}
       <div className="statement-header-block">
         <h3 className="statement-company-title">LUCKY BETPLAY CORPORATION</h3>
-        <div className="statement-branch-tag">
-          <span>BRANCH:</span> <strong>{(branchName || 'Mandaue').toUpperCase()}</strong>
-        </div>
         <h4 className="statement-report-title">CONDENSED SUPERVISOR AGENT REMITTANCE SUMMARY</h4>
         <p className="statement-report-subtitle">(Unaudited — Official Draw Performance &amp; Accounting Ledger)</p>
         <div className="statement-meta-row">
@@ -744,175 +799,196 @@ function SupervisorStatementTable({
         </div>
       </div>
 
-      <div className="statement-table-container">
-        <table className="statement-balance-table">
-          <thead>
-            <tr className="statement-th-row">
-              <th className="statement-th statement-th-agent">AGENT / TELLER</th>
-              <th className="statement-th statement-th-num">GROSS</th>
-              <th className="statement-th statement-th-num">HITS</th>
-              <th className="statement-th statement-th-num">COMMISSION</th>
-              <th className="statement-th statement-th-num">NET</th>
-              <th className="statement-th statement-th-num statement-th-remit">NET SALES / REMITTANCE</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="statement-section-divider-row">
-              <td colSpan={6} className="statement-section-heading-cell">
-                <strong>POSITIVE REMITTANCES (TO COLLECT):</strong>
-              </td>
-            </tr>
+      {/* ── 2-COLUMN BODY: LEFT = Balance Table | RIGHT = Draw Deficits ── */}
+      <div className="statement-two-col-body">
 
-            {positive.length === 0 ? (
-              <tr className="statement-empty-state-row">
-                <td colSpan={6} className="statement-empty-state-cell">
-                  No positive remittance agents recorded for this period.
-                </td>
-              </tr>
-            ) : (
-              positive.map((agent, index) => (
-                <tr key={`pos-${agent.key || index}`} className="statement-data-row statement-pos-row">
-                  <td className="statement-td statement-agent-td">
-                    <span className="statement-agent-name">{agent.teller}</span>
-                  </td>
-                  <td className="statement-td statement-num-td">
-                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                    {formatAmount(agent.gross)}
-                  </td>
-                  <td className="statement-td statement-num-td">{formatAmount(agent.hits)}</td>
-                  <td className="statement-td statement-num-td">
-                    {formatAmount(agent.commission)}
-                    {agent.commissionRate && (
-                      <small style={{ display: 'block', fontSize: '9px', color: '#64748b' }}>({agent.commissionRate}%)</small>
-                    )}
-                  </td>
-                  <td className="statement-td statement-num-td">{formatAmount(agent.net)}</td>
-                  <td className="statement-td statement-num-td statement-remit-td">
-                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                    <strong>{formatAmount(agent.netSales)}</strong>
+        {/* LEFT COLUMN – Official Balance Table */}
+        <div className="statement-left-col">
+          <div className="statement-col-label">OFFICIAL REMITTANCE STATEMENT</div>
+          <div className="statement-table-container">
+            <table className="statement-balance-table">
+              <thead>
+                <tr className="statement-th-row">
+                  <th className="statement-th statement-th-agent">AGENT / TELLER</th>
+                  <th className="statement-th statement-th-num">GROSS</th>
+                  <th className="statement-th statement-th-num">HITS</th>
+                  <th className="statement-th statement-th-num">COMM</th>
+                  <th className="statement-th statement-th-num">NET</th>
+                  <th className="statement-th statement-th-num statement-th-remit">REMITTANCE</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="statement-section-divider-row">
+                  <td colSpan={6} className="statement-section-heading-cell">
+                    <strong>POSITIVE REMITTANCES (TO COLLECT):</strong>
                   </td>
                 </tr>
-              ))
-            )}
 
-            <tr className="statement-subtotal-data-row statement-pos-subtotal-row">
-              <td className="statement-td statement-subtotal-label-td">
-                <span className="statement-subtotal-indent">Total Positive Remittances (Subtotal)</span>
-              </td>
-              <td className="statement-td statement-subtotal-num-td">
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>{formatAmount(positiveTotals.gross)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td">
-                <strong>{formatAmount(positiveTotals.hits)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td">
-                <strong>{formatAmount(positiveTotals.commission)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td">
-                <strong>{formatAmount(positiveTotals.net)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-remit-td">
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>{formatAmount(positiveTotals.netSales)}</strong>
-              </td>
-            </tr>
+                {positive.length === 0 ? (
+                  <tr className="statement-empty-state-row">
+                    <td colSpan={6} className="statement-empty-state-cell">
+                      No positive remittance agents recorded for this period.
+                    </td>
+                  </tr>
+                ) : (
+                  positive.map((agent, index) => (
+                    <tr key={`pos-${agent.key || index}`} className="statement-data-row statement-pos-row">
+                      <td className="statement-td statement-agent-td">
+                        <span className="statement-agent-name">{agent.teller}</span>
+                      </td>
+                      <td className="statement-td statement-num-td">
+                        {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                        {formatAmount(agent.gross)}
+                      </td>
+                      <td className="statement-td statement-num-td">{formatAmount(agent.hits)}</td>
+                      <td className="statement-td statement-num-td">
+                        {formatAmount(agent.commission)}
+                        {agent.commissionRate && (
+                          <small style={{ display: 'block', fontSize: '8px', color: '#64748b' }}>({agent.commissionRate}%)</small>
+                        )}
+                      </td>
+                      <td className="statement-td statement-num-td">{formatAmount(agent.net)}</td>
+                      <td className="statement-td statement-num-td statement-remit-td">
+                        {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                        <strong>{formatAmount(agent.netSales)}</strong>
+                      </td>
+                    </tr>
+                  ))
+                )}
 
-            <tr className="statement-spacer-divider-row" aria-hidden="true">
-              <td colSpan={6} />
-            </tr>
-
-            <tr className="statement-section-divider-row statement-negative-header-row">
-              <td colSpan={6} className="statement-section-heading-cell statement-negative-heading-cell">
-                <strong>NEGATIVE DEFICITS:</strong>
-              </td>
-            </tr>
-
-            {negative.length === 0 ? (
-              <tr className="statement-empty-state-row">
-                <td colSpan={6} className="statement-empty-state-cell statement-clean-indicator">
-                  ✓ No negative deficit records — all {positive.length} agents have positive balances.
-                </td>
-              </tr>
-            ) : (
-              negative.map((agent, index) => (
-                <tr key={`neg-${agent.key || index}`} className="statement-data-row statement-neg-row">
-                  <td className="statement-td statement-agent-td">
-                    <span className="statement-agent-name">{agent.teller}</span>
+                <tr className="statement-subtotal-data-row statement-pos-subtotal-row">
+                  <td className="statement-td statement-subtotal-label-td">
+                    <span className="statement-subtotal-indent">Total Positive (Subtotal)</span>
                   </td>
-                  <td className="statement-td statement-num-td">
-                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                    {formatAmount(agent.gross)}
+                  <td className="statement-td statement-subtotal-num-td">
+                    <span className="accounting-currency-symbol">₱</span>
+                    <strong>{formatAmount(positiveTotals.gross)}</strong>
                   </td>
-                  <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.hits)}</td>
-                  <td className="statement-td statement-num-td">
-                    {formatAmount(agent.commission)}
-                    {agent.commissionRate && (
-                      <small style={{ display: 'block', fontSize: '9px', color: '#64748b' }}>({agent.commissionRate}%)</small>
-                    )}
+                  <td className="statement-td statement-subtotal-num-td">
+                    <strong>{formatAmount(positiveTotals.hits)}</strong>
                   </td>
-                  <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.net)}</td>
-                  <td className="statement-td statement-num-td statement-remit-td accounting-deficit-text">
-                    {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                    <strong>({formatAmount(Math.abs(agent.netSales))})</strong>
+                  <td className="statement-td statement-subtotal-num-td">
+                    <strong>{formatAmount(positiveTotals.commission)}</strong>
+                  </td>
+                  <td className="statement-td statement-subtotal-num-td">
+                    <strong>{formatAmount(positiveTotals.net)}</strong>
+                  </td>
+                  <td className="statement-td statement-subtotal-num-td statement-remit-td">
+                    <span className="accounting-currency-symbol">₱</span>
+                    <strong>{formatAmount(positiveTotals.netSales)}</strong>
                   </td>
                 </tr>
-              ))
-            )}
 
-            <tr className="statement-subtotal-data-row statement-neg-subtotal-row">
-              <td className="statement-td statement-subtotal-label-td">
-                <span className="statement-subtotal-indent statement-neg-label-indent">Total Deficits (Subtotal)</span>
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>{formatAmount(negativeTotals.gross)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                <strong>{formatAmount(negativeTotals.hits)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
-                <strong>{formatAmount(negativeTotals.commission)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                <strong>{formatAmount(negativeTotals.net)}</strong>
-              </td>
-              <td className="statement-td statement-subtotal-num-td statement-remit-td statement-neg-subtotal-cell accounting-deficit-text">
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>({formatAmount(Math.abs(negativeTotals.netSales))})</strong>
-              </td>
-            </tr>
+                <tr className="statement-spacer-divider-row" aria-hidden="true">
+                  <td colSpan={6} />
+                </tr>
 
-            <tr className="statement-spacer-divider-row" aria-hidden="true">
-              <td colSpan={6} />
-            </tr>
+                <tr className="statement-section-divider-row statement-negative-header-row">
+                  <td colSpan={6} className="statement-section-heading-cell statement-negative-heading-cell">
+                    <strong>NEGATIVE DEFICITS:</strong>
+                  </td>
+                </tr>
 
-            <tr className="statement-grand-total-row">
-              <td className="statement-td statement-grand-label-td">
-                <strong>CONSOLIDATED SUPERVISOR TOTAL (OVERALL DRAWS)</strong>
-              </td>
-              <td className="statement-td statement-grand-num-td">
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>{formatAmount(grandTotals.gross)}</strong>
-              </td>
-              <td className="statement-td statement-grand-num-td">
-                <strong>{formatAmount(grandTotals.hits)}</strong>
-              </td>
-              <td className="statement-td statement-grand-num-td">
-                <strong>{formatAmount(grandTotals.commission)}</strong>
-              </td>
-              <td className="statement-td statement-grand-num-td">
-                <strong>{formatAmount(grandTotals.net)}</strong>
-              </td>
-              <td className={`statement-td statement-grand-num-td statement-remit-td ${grandTotals.netSales < 0 ? 'accounting-deficit-text' : ''}`}>
-                <span className="accounting-currency-symbol">₱</span>
-                <strong>{grandTotals.netSales < 0 ? `(${formatAmount(Math.abs(grandTotals.netSales))})` : formatAmount(grandTotals.netSales)}</strong>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+                {negative.length === 0 ? (
+                  <tr className="statement-empty-state-row">
+                    <td colSpan={6} className="statement-empty-state-cell statement-clean-indicator">
+                      ✓ No negative deficit records — all {positive.length} agents have positive balances.
+                    </td>
+                  </tr>
+                ) : (
+                  negative.map((agent, index) => (
+                    <tr key={`neg-${agent.key || index}`} className="statement-data-row statement-neg-row">
+                      <td className="statement-td statement-agent-td">
+                        <span className="statement-agent-name">{agent.teller}</span>
+                      </td>
+                      <td className="statement-td statement-num-td">
+                        {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                        {formatAmount(agent.gross)}
+                      </td>
+                      <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.hits)}</td>
+                      <td className="statement-td statement-num-td">
+                        {formatAmount(agent.commission)}
+                        {agent.commissionRate && (
+                          <small style={{ display: 'block', fontSize: '8px', color: '#64748b' }}>({agent.commissionRate}%)</small>
+                        )}
+                      </td>
+                      <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.net)}</td>
+                      <td className="statement-td statement-num-td statement-remit-td accounting-deficit-text">
+                        {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                        <strong>({formatAmount(Math.abs(agent.netSales))})</strong>
+                      </td>
+                    </tr>
+                  ))
+                )}
 
+                <tr className="statement-subtotal-data-row statement-neg-subtotal-row">
+                  <td className="statement-td statement-subtotal-label-td">
+                    <span className="statement-subtotal-indent statement-neg-label-indent">Total Deficits (Subtotal)</span>
+                  </td>
+                  <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
+                    <span className="accounting-currency-symbol">₱</span>
+                    <strong>{formatAmount(negativeTotals.gross)}</strong>
+                  </td>
+                  <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
+                    <strong>{formatAmount(negativeTotals.hits)}</strong>
+                  </td>
+                  <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
+                    <strong>{formatAmount(negativeTotals.commission)}</strong>
+                  </td>
+                  <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
+                    <strong>{formatAmount(negativeTotals.net)}</strong>
+                  </td>
+                  <td className="statement-td statement-subtotal-num-td statement-remit-td statement-neg-subtotal-cell accounting-deficit-text">
+                    <span className="accounting-currency-symbol">₱</span>
+                    <strong>({formatAmount(Math.abs(negativeTotals.netSales))})</strong>
+                  </td>
+                </tr>
+
+                <tr className="statement-spacer-divider-row" aria-hidden="true">
+                  <td colSpan={6} />
+                </tr>
+
+                <tr className="statement-grand-total-row">
+                  <td className="statement-td statement-grand-label-td">
+                    <strong>CONSOLIDATED SUPERVISOR TOTAL</strong>
+                  </td>
+                  <td className="statement-td statement-grand-num-td">
+                    <span className="accounting-currency-symbol">₱</span>
+                    <strong>{formatAmount(grandTotals.gross)}</strong>
+                  </td>
+                  <td className="statement-td statement-grand-num-td">
+                    <strong>{formatAmount(grandTotals.hits)}</strong>
+                  </td>
+                  <td className="statement-td statement-grand-num-td">
+                    <strong>{formatAmount(grandTotals.commission)}</strong>
+                  </td>
+                  <td className="statement-td statement-grand-num-td">
+                    <strong>{formatAmount(grandTotals.net)}</strong>
+                  </td>
+                  <td className={`statement-td statement-grand-num-td statement-remit-td ${grandTotals.netSales < 0 ? 'accounting-deficit-text' : ''}`}>
+                    <span className="accounting-currency-symbol">₱</span>
+                    <strong>{grandTotals.netSales < 0 ? `(${formatAmount(Math.abs(grandTotals.netSales))})` : formatAmount(grandTotals.netSales)}</strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN – Draw Deficit Breakdown */}
+        <div className="statement-right-col">
+          <div className="statement-col-label">DRAW DEFICIT BREAKDOWN</div>
+          <DrawDeficitsExcelStatement
+            group={group}
+            allSupervisors={allSupervisors}
+            selectedDate={selectedDate}
+            branchName={branchName}
+          />
+        </div>
+
+      </div>{/* end .statement-two-col-body */}
+
+      {/* ── FULL-WIDTH FOOTER ─────────────────────────────────────── */}
       <div className="statement-signatures-section">
         <div className="statement-sig-column">
           <div className="statement-sig-line" />
@@ -922,19 +998,21 @@ function SupervisorStatementTable({
         </div>
         <div className="statement-sig-column">
           <div className="statement-sig-line" />
-          <span className="statement-sig-title">CASHIER / RECEIVER</span>
-          <strong className="statement-sig-name">Authorized Cashier ({branchName})</strong>
+          <span className="statement-sig-title">HEAD CASHIER / RECEIVER</span>
+          <strong className="statement-sig-name">Authorized Head Cashier ({branchName})</strong>
           <span className="statement-sig-date">Date Received: _____________________</span>
         </div>
       </div>
       <div className="statement-print-footer-tag">
-        LUCKY BETPLAY CORPORATION • OFFICIAL REMITTANCE STATEMENT • A4 RECORD • {formatDisplayDate(selectedDate)}
+        LUCKY BETPLAY CORPORATION • OFFICIAL REMITTANCE STATEMENT &amp; DRAW DEFICIT AUDIT • LONG BOND PAPER (8.5 × 13 IN) • {formatDisplayDate(selectedDate)}
       </div>
+    </div>
     </div>
   )
 }
 
 function downloadCsv(filename, rows) {
+
   if (!rows || rows.length === 0) return
   const keys = Object.keys(rows[0])
   const header = keys.map((k) => `"${String(k).replace(/"/g, '""')}"`).join(',')
@@ -1064,28 +1142,17 @@ function SupervisorStatementModal({
   canPrint = true,
   currentUser = null,
 }) {
-  const [fitOnePage, setFitOnePage] = useState(true)
+  const [statementViewMode, setStatementViewMode] = useState('balance_sheet') // 'balance_sheet' (Official + Draw Deficits) | 'excel_grid'
+
   const agentCount = group?.agents?.length || 0
   const recommendedScale = useMemo(() => calculateAutoFitScale(agentCount), [agentCount])
-  const [isAutoFit, setIsAutoFit] = useState(true)
-  const [manualScale, setManualScale] = useState(recommendedScale)
-
-  useEffect(() => {
-    if (isAutoFit) {
-      setManualScale(recommendedScale)
-    }
-  }, [recommendedScale, isAutoFit])
-
-  const currentScale = fitOnePage ? (isAutoFit ? recommendedScale : manualScale) : 100
 
   const densityTier = useMemo(() => {
-    if (currentScale <= 52) return 'density-micro'
-    if (currentScale <= 68) return 'density-ultra'
-    if (currentScale <= 84) return 'density-compact'
+    if (recommendedScale <= 52) return 'density-micro'
+    if (recommendedScale <= 68) return 'density-ultra'
+    if (recommendedScale <= 84) return 'density-compact'
     return 'density-standard'
-  }, [currentScale])
-
-  const isSafeOnePage = currentScale <= (recommendedScale + 4)
+  }, [recommendedScale])
 
   useEffect(() => {
     document.body.classList.add('statement-modal-active')
@@ -1098,6 +1165,17 @@ function SupervisorStatementModal({
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [onClose])
+
+  useEffect(() => {
+    if (statementViewMode === 'excel_grid') {
+      document.body.classList.add('print-excel-roster-active')
+    } else {
+      document.body.classList.remove('print-excel-roster-active')
+    }
+    return () => {
+      document.body.classList.remove('print-excel-roster-active')
+    }
+  }, [statementViewMode])
 
   const consolidatedOption = useMemo(() => {
     const agents = allSupervisors.flatMap((s) => s.agents.map((a) => ({
@@ -1125,11 +1203,11 @@ function SupervisorStatementModal({
       <div className="statement-modal-shell" onClick={(e) => e.stopPropagation()}>
         <div className="statement-modal-controls-bar no-print">
           <div className="statement-controls-left">
-            <span className="statement-controls-title">Official Remittance Statement</span>
-            <span className="statement-a4-badge" title="Standard A4 Bond Paper (210 x 297mm)">
-              <Icon name="fileText" size={12} />
-              <span>A4 Bond Paper</span>
-            </span>
+            <span className="statement-controls-title">Print Statement:</span>
+
+            {/* Official Statement & Draw Deficits — only mode */}
+
+            {/* Supervisor Selector */}
             {allSupervisors.length > 1 && (
               <div className="statement-dropdown-wrap">
                 <Icon name="user" size={13} />
@@ -1157,91 +1235,8 @@ function SupervisorStatementModal({
               </div>
             )}
           </div>
+
           <div className="statement-controls-right">
-            <label
-              className="statement-fit-toggle"
-              title="Automatically scales fonts, line spacing, and padding to guarantee the entire statement fits strictly on 1 A4 bond paper"
-            >
-              <span className="statement-fit-toggle-label">Auto-Fit 1-Page</span>
-              <span className="ios-toggle-mini">
-                <input
-                  type="checkbox"
-                  checked={fitOnePage && isAutoFit}
-                  onChange={(e) => {
-                    const checked = e.target.checked
-                    setFitOnePage(checked)
-                    setIsAutoFit(checked)
-                    if (checked) {
-                      setManualScale(recommendedScale)
-                    }
-                  }}
-                />
-                <span className="ios-toggle-mini-track" />
-              </span>
-            </label>
-
-            {/* Font Size & Density Stepper Controls */}
-            <div className="statement-scale-stepper-wrap" title="Adjust font size and layout scale (Guaranteed 1-Page fit)">
-              <button
-                type="button"
-                className="statement-scale-step-btn"
-                onClick={() => {
-                  setFitOnePage(true)
-                  setIsAutoFit(false)
-                  setManualScale((prev) => Math.max(55, prev - 5))
-                }}
-                disabled={currentScale <= 55}
-                title="Decrease font size & density (A-)"
-              >
-                <span className="scale-step-label">A-</span>
-              </button>
-
-              <div className="statement-scale-dropdown-wrap">
-                <select
-                  value={isAutoFit ? 'auto' : currentScale}
-                  onChange={(e) => {
-                    setFitOnePage(true)
-                    if (e.target.value === 'auto') {
-                      setIsAutoFit(true)
-                      setManualScale(recommendedScale)
-                    } else {
-                      setIsAutoFit(false)
-                      setManualScale(Number(e.target.value))
-                    }
-                  }}
-                  className="statement-scale-select"
-                  title="Choose density preset or custom scale"
-                >
-                  <option value="auto">Auto-Fit (Optimal {recommendedScale}%)</option>
-                  <option value="100">100% (Standard - Full Page)</option>
-                  <option value="95">95% (Comfortable)</option>
-                  <option value="90">90% (Balanced)</option>
-                  <option value="85">85% (Compact)</option>
-                  <option value="80">80% (Dense)</option>
-                  <option value="75">75% (Ultra-Dense)</option>
-                  <option value="70">70% (High Volume)</option>
-                  <option value="65">65% (Micro)</option>
-                  {!['auto', '100', '95', '90', '85', '80', '75', '70', '65'].includes(String(currentScale)) && (
-                    <option value={currentScale}>{currentScale}% (Custom)</option>
-                  )}
-                </select>
-              </div>
-
-              <button
-                type="button"
-                className="statement-scale-step-btn"
-                onClick={() => {
-                  setFitOnePage(true)
-                  setIsAutoFit(false)
-                  setManualScale((prev) => Math.min(120, prev + 5))
-                }}
-                disabled={currentScale >= 120}
-                title="Increase font size & density (A+)"
-              >
-                <span className="scale-step-label">A+</span>
-              </button>
-            </div>
-
             <button
               type="button"
               className={`statement-action-btn statement-print-trigger-btn ${!canPrint ? 'is-perm-locked' : ''}`}
@@ -1252,7 +1247,7 @@ function SupervisorStatementModal({
                 }
                 handlePrint()
               }}
-              title={canPrint ? "Print official document on 1 A4 Bond Paper (or Save as PDF)" : "Printing statements is locked for your account in the Role Matrix"}
+              title={canPrint ? "Print official document on Long Bond Paper (or Save as PDF)" : "Printing statements is locked for your account in the Role Matrix"}
             >
               <Icon name={canPrint ? "print" : "lock"} size={14} />
               <span>{canPrint ? "Print Statement" : "Print Locked"}</span>
@@ -1270,51 +1265,37 @@ function SupervisorStatementModal({
         </div>
 
         <div className="statement-modal-content-area">
+          <style>{`@page { size: 8.5in 13in portrait !important; margin: 4mm 8mm !important; }`}</style>
           <div className="statement-preview-header-tag no-print">
             <div className="statement-preview-meta-info">
               <span className="statement-preview-page-pill">
                 <Icon name="fileText" size={12} />
-                A4 Bond Paper Preview (210 × 297 mm)
+                Official Statement &amp; Draw Deficits • Long Bond Paper (8.5 × 13 in)
               </span>
               <span className="statement-preview-scale-pill">
-                Scale: <strong>{currentScale}%</strong>
+                Supervisor: <strong>{group?.supervisor || 'ALL'}</strong>
               </span>
               <span className="statement-preview-agent-pill">
-                {agentCount} Agents Total
+                {agentCount} Total Agents
               </span>
             </div>
             <div className="statement-preview-status-indicator">
-              {isSafeOnePage ? (
-                <span className="statement-fit-badge fit-safe" title="Guaranteed to fit completely within 1 single A4 bond paper">
-                  <Icon name="check" size={12} />
-                  <span>1-Page A4 Guaranteed</span>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="statement-fit-badge fit-warn-btn"
-                  onClick={() => {
-                    setFitOnePage(true)
-                    setIsAutoFit(true)
-                    setManualScale(recommendedScale)
-                  }}
-                  title="Scale is large and may spill onto Page 2. Click to Auto-Fit onto 1 Page."
-                >
-                  <Icon name="alert" size={12} />
-                  <span>May Spill Over • Click to Auto-Fit</span>
-                </button>
-              )}
+              <span className="statement-fit-badge fit-safe" title="Guaranteed to fit completely within 1 single Long bond paper">
+                <Icon name="check" size={12} />
+                <span>1 Long Bond Paper Guaranteed</span>
+              </span>
             </div>
           </div>
 
-          <div className="statement-a4-page-frame">
+          <div className="statement-a4-page-frame statement-long-bond-frame">
             <SupervisorStatementTable
               group={group}
+              allSupervisors={allSupervisors}
               selectedDate={selectedDate}
               branchName={branchName}
               isModal={true}
-              fitOnePage={fitOnePage}
-              fontScale={currentScale}
+              fitOnePage={true}
+              fontScale={recommendedScale}
               densityTier={densityTier}
             />
           </div>
