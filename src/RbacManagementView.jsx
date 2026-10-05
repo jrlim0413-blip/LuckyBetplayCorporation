@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import './RbacManagementView.css'
+import ConfirmActionModal from './ConfirmActionModal'
 import {
   getRbacUsers,
   saveRbacUsers,
@@ -867,13 +868,21 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
     }
   }
 
+  const [showResetRolesConfirm, setShowResetRolesConfirm] = useState(false)
+  const [isResettingRoles, setIsResettingRoles] = useState(false)
+
   // Reset Role Matrix to Defaults
   const handleResetRoles = () => {
-    if (confirm('Reset role permissions matrix back to default authorized settings?')) {
-      setRoles(DEFAULT_ROLES)
-      saveRbacRoles(DEFAULT_ROLES)
-      showNotification('Role permissions restored to factory defaults.')
-    }
+    setShowResetRolesConfirm(true)
+  }
+
+  const handleConfirmResetRoles = async () => {
+    setIsResettingRoles(true)
+    setRoles(DEFAULT_ROLES)
+    await saveRbacRoles(DEFAULT_ROLES)
+    setIsResettingRoles(false)
+    setShowResetRolesConfirm(false)
+    showNotification('Role permissions restored to factory defaults.')
   }
 
   return (
@@ -1259,7 +1268,7 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
             </div>
             <div className="rbac-matrix-header-right">
               {isSupabaseConfigured && (
-                <div className="rbac-cloud-matrix-badge" title="Role and account permissions are synced live in Supabase Cloud">
+                <div className="rbac-cloud-matrix-badge" title="Role and account permissions are synced live in Cloud Database">
                   <span className="sync-status-dot status-connected" />
                   <span>Cloud Synced Online</span>
                 </div>
@@ -1268,7 +1277,7 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                 type="button"
                 className="rbac-secondary-btn"
                 onClick={async () => {
-                  showNotification('Syncing latest permissions from Supabase Cloud...', 'info', 'Cloud Sync')
+                  showNotification('Syncing latest permissions from Cloud Database...', 'info', 'Cloud Sync')
                   const res = await syncMatrixPermissionsFromSupabase()
                   if (res.success) {
                     showNotification('Cloud permissions successfully synced and applied!', 'success', 'Synced')
@@ -1276,7 +1285,7 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
                     showNotification('Using cached local permissions.', 'info', 'Sync Status')
                   }
                 }}
-                title="Synchronize latest permissions from Supabase Cloud"
+                title="Synchronize latest permissions from Cloud Database"
               >
                 <SvgIcon name="refresh" size={14} />
                 <span>Sync Cloud</span>
@@ -2075,6 +2084,20 @@ export default function RbacManagementView({ currentUser, onSimulateUser, branch
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal for Resetting Role Matrix */}
+      <ConfirmActionModal
+        isOpen={showResetRolesConfirm}
+        title="Reset Role Permissions Matrix?"
+        message="Are you sure you want to reset the role permissions matrix back to default authorized settings? This will restore factory defaults for all roles."
+        confirmText="Yes, Reset Matrix"
+        cancelText="Cancel"
+        confirmVariant="warning"
+        isProcessing={isResettingRoles}
+        processingText="Resetting Permissions..."
+        onConfirm={handleConfirmResetRoles}
+        onCancel={() => !isResettingRoles && setShowResetRolesConfirm(false)}
+      />
     </div>
   )
 }

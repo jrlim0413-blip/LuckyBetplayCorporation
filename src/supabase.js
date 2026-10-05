@@ -708,3 +708,130 @@ export async function getSupabaseSession() {
     return null
   }
 }
+
+export const PAYOUT_SHORTAGE_TABLE_NAME = 'payout_shortage_replenishments'
+
+/**
+ * Fetch Payout Shortage Replenishments from Supabase database by branch and date.
+ */
+export async function getPayoutShortagesFromSupabase(branch, claimDate) {
+  if (!supabase) return { success: false, data: [] }
+  try {
+    let res = await supabase
+      .from(PAYOUT_SHORTAGE_TABLE_NAME)
+      .select('*')
+      .eq('branch', branch)
+      .eq('claim_date', claimDate)
+      .order('created_at', { ascending: true })
+
+    if (res.error && res.error.code === 'PGRST205') {
+      res = await supabase
+        .from('cashier_negative_claims')
+        .select('*')
+        .eq('branch', branch)
+        .eq('claim_date', claimDate)
+        .order('created_at', { ascending: true })
+    }
+
+    if (res.error) {
+      return {
+        success: false,
+        tableMissing: res.error.code === 'PGRST205',
+        error: res.error.message,
+        data: [],
+      }
+    }
+
+    const normalized = (res.data || []).map((row) => ({
+      id: row.id,
+      supervisor: row.supervisor,
+      drawRotation: row.draw_rotation || '1st Draw',
+      amount: row.amount !== null ? String(row.amount) : '',
+      isSavedInDb: true,
+    }))
+
+    return { success: true, data: normalized }
+  } catch (err) {
+    return { success: false, error: err.message, data: [] }
+  }
+}
+
+/**
+ * Save / sync Payout Shortage Replenishments to Supabase database for a specific branch and date.
+ */
+export async function savePayoutShortagesToSupabase(branch, claimDate, claimsArray) {
+  if (!supabase) return { success: false, error: 'Supabase client is not configured' }
+  try {
+    let tableName = PAYOUT_SHORTAGE_TABLE_NAME
+
+    const { error: delErr } = await supabase
+      .from(tableName)
+      .delete()
+      .eq('branch', branch)
+      .eq('claim_date', claimDate)
+
+    if (delErr && delErr.code === 'PGRST205') {
+      tableName = 'cashier_negative_claims'
+      await supabase
+        .from(tableName)
+        .delete()
+        .eq('branch', branch)
+        .eq('claim_date', claimDate)
+    }
+
+    const rowsToInsert = (claimsArray || [])
+      .filter((item) => item.supervisor || Number(item.amount) > 0)
+      .map((item, idx) => ({
+        id: item.id || `shortage_${branch}_${claimDate}_${idx}_${Date.now()}`,
+        branch: branch,
+        claim_date: claimDate,
+        supervisor: item.supervisor || 'Unassigned',
+        draw_rotation: item.drawRotation || '1st Draw',
+        amount: Number(item.amount) || 0,
+        updated_at: new Date().toISOString(),
+      }))
+
+    if (rowsToInsert.length > 0) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .upsert(rowsToInsert)
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+      return { success: true, data }
+    }
+
+    return { success: true, data: [] }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Delete a specific Payout Shortage Replenishment record from Supabase by ID.
+ */
+export async function deletePayoutShortageRowFromSupabase(id) {
+  if (!supabase || !id) return { success: false, error: 'Supabase client is not configured' }
+  try {
+    let tableName = PAYOUT_SHORTAGE_TABLE_NAME
+    let res = await supabase.from(tableName).delete().eq('id', id)
+
+    if (res.error && res.error.code === 'PGRST205') {
+      tableName = 'cashier_negative_claims'
+      res = await supabase.from(tableName).delete().eq('id', id)
+    }
+
+    if (res.error) {
+      return { success: false, error: res.error.message }
+    }
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+}
+
+// Backwards compatibility exports
+export const getCashierClaimsFromSupabase = getPayoutShortagesFromSupabase
+export const saveCashierClaimsToSupabase = savePayoutShortagesToSupabase
+export const deleteCashierClaimFromSupabase = deletePayoutShortageRowFromSupabase

@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { getCashierClaimsFromSupabase, saveCashierClaimsToSupabase, deleteCashierClaimFromSupabase } from './supabase'
+import ConfirmActionModal from './ConfirmActionModal'
 import './DeficitInspectorModal.css'
 
 function formatAmount(value) {
@@ -71,14 +73,144 @@ export default function DeficitInspectorModal({
   ],
   selectedDate,
   branchName = 'Mandaue',
-  canPrint = true,
 }) {
+  const [activeModalTab, setActiveModalTab] = useState('breakdown') // 'breakdown' | 'cashier_claims'
   const [selectedDrawFilter, setSelectedDrawFilter] = useState('all') // 'all', 'morning', 'afternoon', 'evening', 'remittance', or specific time '10:30 AM', etc.
   const [selectedSupervisor, setSelectedSupervisor] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState('grouped') // 'grouped' | 'flat'
   const [sortBy, setSortBy] = useState('deficit-desc') // 'deficit-desc', 'deficit-asc', 'name-asc', 'spvr-asc'
   const [copiedNotice, setCopiedNotice] = useState(false)
+
+  // Payout Shortage Replenishment State (Pure Database - No LocalStorage)
+  const [cashierClaims, setCashierClaims] = useState([])
+  const [dbSyncStatus, setDbSyncStatus] = useState('idle') // 'idle' | 'saving' | 'saved' | 'error'
+  const [pendingDeleteClaim, setPendingDeleteClaim] = useState(null)
+  const [isDeletingClaim, setIsDeletingClaim] = useState(false)
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false)
+  const [isSavingToDb, setIsSavingToDb] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadClaimsFromDatabase() {
+      // Fetch directly from Supabase database table
+      const res = await getCashierClaimsFromSupabase(branchName, selectedDate)
+      if (!isMounted) return
+
+      if (res.success && res.data) {
+        setCashierClaims(res.data) // Set state directly from DB
+        setDbSyncStatus(res.data.length > 0 ? 'saved' : 'idle')
+      } else {
+        setCashierClaims([]) // Default to empty table if no records
+      }
+    }
+
+    loadClaimsFromDatabase()
+
+    return () => {
+      isMounted = false
+    }
+  }, [branchName, selectedDate])
+
+  const updateCashierClaims = (newClaims) => {
+    setCashierClaims(newClaims)
+    setDbSyncStatus('idle')
+  }
+
+  const handleSaveToDatabase = async () => {
+    setDbSyncStatus('saving')
+    const res = await saveCashierClaimsToSupabase(branchName, selectedDate, cashierClaims)
+    if (res.success) {
+      setDbSyncStatus('saved')
+      // Mark all current rows as saved in DB
+      setCashierClaims((prev) => prev.map((item) => ({ ...item, isSavedInDb: true })))
+      setTimeout(() => setDbSyncStatus('idle'), 3000)
+    } else {
+      setDbSyncStatus('error')
+      alert(`Supabase Database Error: ${res.error || 'Please run the SQL schema script in Supabase Editor to create payout_shortage_replenishments table.'}`)
+    }
+  }
+
+  const handleConfirmSaveToDatabase = async () => {
+    setIsSavingToDb(true)
+    await handleSaveToDatabase()
+    setIsSavingToDb(false)
+    setShowSaveConfirm(false)
+  }
+
+  const handleAddClaimRow = () => {
+    const newRow = {
+      id: `shortage-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      supervisor: '',
+      drawRotation: '1st Draw',
+      amount: '',
+      isSavedInDb: false,
+    }
+    updateCashierClaims([...cashierClaims, newRow])
+  }
+
+  const handleUpdateClaim = (id, field, value) => {
+    const updated = cashierClaims.map((item) =>
+      item.id === id ? { ...item, [field]: value, isSavedInDb: false } : item
+    )
+    updateCashierClaims(updated)
+  }
+
+  const handleDeleteClaimRow = async (id) => {
+    const updated = cashierClaims.filter((item) => item.id !== id)
+    updateCashierClaims(updated)
+
+    setDbSyncStatus('saving')
+    if (id && !id.startsWith('shortage-') && !id.startsWith('claim-')) {
+      await deleteCashierClaimFromSupabase(id)
+    }
+    const res = await saveCashierClaimsToSupabase(branchName, selectedDate, updated)
+    if (res.success) {
+      setDbSyncStatus('saved')
+      setCashierClaims(updated.map((item) => ({ ...item, isSavedInDb: true })))
+      setTimeout(() => setDbSyncStatus('idle'), 3000)
+    } else {
+      setDbSyncStatus('error')
+    }
+  }
+
+  const handleConfirmDeleteRow = async () => {
+    if (!pendingDeleteClaim) return
+    setIsDeletingClaim(true)
+    await handleDeleteClaimRow(pendingDeleteClaim.id)
+    setIsDeletingClaim(false)
+    setPendingDeleteClaim(null)
+  }
+
+  const totalCashierClaims = useMemo(() => {
+    return cashierClaims.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
+  }, [cashierClaims])
+
+  const handleCopyCashierClaims = () => {
+    if (cashierClaims.length === 0) return
+
+    let text = `💵 PAYOUT SHORTAGE REPLENISHMENTS\n`
+    text += `🏢 Branch: ${branchName} | 📅 Date: ${selectedDate}\n`
+    text += `-------------------------------------------\n\n`
+
+    cashierClaims.forEach((claim) => {
+      const amt = Number(claim.amount) || 0
+      if (amt > 0 || claim.supervisor) {
+        text += `👤 SUPERVISOR: ${claim.supervisor || 'Unspecified'}\n`
+        text += `  Draw Rotation: ${claim.drawRotation || '1st Draw'}\n`
+        text += `  Replenishment Amount: (₱ ${formatViberNum(amt)})\n\n`
+      }
+    })
+
+    text += `-------------------------------------------\n`
+    text += `💰 TOTAL PAYOUT SHORTAGE REPLENISHMENTS: (₱ ${formatViberNum(totalCashierClaims)})`
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedNotice(true)
+      setTimeout(() => setCopiedNotice(false), 2500)
+    })
+  }
 
   // Close on Escape key
   useEffect(() => {
@@ -337,31 +469,66 @@ export default function DeficitInspectorModal({
     }
   }, [filteredRecords])
 
+  // Helper to format currency/numbers for Viber
+  const formatViberNum = (num) => {
+    const val = Number(num) || 0
+    return val.toLocaleString('en-PH', {
+      minimumFractionDigits: val % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    })
+  }
+
   // Copy Deficits for Viber / Messenger
   const handleCopySummary = () => {
     if (filteredRecords.length === 0) return
 
-    let text = `🔴 LUCKY BETPLAY - DEFICIT & NEGATIVE REPORT\n`
+    let text = `📋 LUCKY BETPLAY - DEFICIT SUMMARY\n`
     text += `🏢 Branch: ${branchName} | 📅 Date: ${selectedDate}\n`
-    text += `🎯 Filter: ${selectedDrawFilter.toUpperCase()} | Supervisor: ${selectedSupervisor}\n`
-    text += `💰 TOTAL DEFICIT: ₱ ${formatAmount(summaryMetrics.totalDeficit)} (${summaryMetrics.uniqueCount} Agents)\n`
     text += `-------------------------------------------\n`
 
-    if (viewMode === 'grouped') {
-      groupedBySupervisor.forEach((group) => {
-        text += `\n👤 SUPERVISOR: ${group.supervisor} (Subtotal: ₱ ${formatAmount(group.totalDeficit)})\n`
-        group.records.forEach((r) => {
-          text += `  • ${r.agentName}: -₱ ${formatAmount(r.deficit)} [${r.drawTitle} | Gross: ₱${formatAmount(r.gross)} | Hits: ₱${formatAmount(r.hits)}]\n`
+    // Group by Supervisor -> then by Draw
+    const supervisorMap = new Map()
+
+    filteredRecords.forEach((r) => {
+      if (!supervisorMap.has(r.supervisor)) {
+        supervisorMap.set(r.supervisor, new Map())
+      }
+      const drawMap = supervisorMap.get(r.supervisor)
+
+      // Normalize draw header
+      let drawHeader = '1ST DRAW'
+      if (r.drawKey === 'afternoon' || r.drawTitle?.toLowerCase().includes('2nd')) {
+        drawHeader = '2ND DRAW'
+      } else if (r.drawKey === 'evening' || r.drawTitle?.toLowerCase().includes('3rd')) {
+        drawHeader = '3RD DRAW'
+      } else if (r.drawKey === 'morning' || r.drawTitle?.toLowerCase().includes('1st')) {
+        drawHeader = '1ST DRAW'
+      } else if (r.drawKey === 'remittance' || r.drawTitle?.toLowerCase().includes('remittance')) {
+        drawHeader = 'NET REMITTANCE'
+      } else {
+        drawHeader = (r.drawTitle || 'DRAW').toUpperCase()
+      }
+
+      if (!drawMap.has(drawHeader)) {
+        drawMap.set(drawHeader, [])
+      }
+      drawMap.get(drawHeader).push(r)
+    })
+
+    supervisorMap.forEach((drawMap, supervisorName) => {
+      text += `\n👤 SUPERVISOR: ${supervisorName}\n`
+
+      drawMap.forEach((records, drawHeader) => {
+        text += `\n🔴 ${drawHeader}\n`
+        records.forEach((r) => {
+          text += `• ${r.agentName}\n`
+          text += `  Negative: (${formatViberNum(r.deficit)})\n`
         })
       })
-    } else {
-      filteredRecords.forEach((r, idx) => {
-        text += `${idx + 1}. ${r.agentName} (${r.supervisor}): -₱ ${formatAmount(r.deficit)} [${r.drawTitle}]\n`
-      })
-    }
+    })
 
     text += `\n-------------------------------------------\n`
-    text += `Generated via Lucky Betplay Management Portal`
+    text += `💰 TOTAL DEFICIT: (₱ ${formatViberNum(summaryMetrics.totalDeficit)})`
 
     navigator.clipboard.writeText(text).then(() => {
       setCopiedNotice(true)
@@ -427,8 +594,8 @@ export default function DeficitInspectorModal({
             <button
               type="button"
               className={`deficit-action-btn ${copiedNotice ? 'copied-active' : ''}`}
-              onClick={handleCopySummary}
-              title="Copy formatted negative summary for Viber / Messenger"
+              onClick={activeModalTab === 'cashier_claims' ? handleCopyCashierClaims : handleCopySummary}
+              title="Copy formatted summary for Viber / Messenger"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -465,6 +632,199 @@ export default function DeficitInspectorModal({
             </button>
           </div>
         </div>
+
+        {/* Main Modal Navigation Tabs */}
+        <div className="deficit-main-nav-bar">
+          <button
+            type="button"
+            className={`deficit-main-nav-tab ${activeModalTab === 'breakdown' ? 'active' : ''}`}
+            onClick={() => setActiveModalTab('breakdown')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            <span>Draw Deficits Breakdown</span>
+          </button>
+
+          <button
+            type="button"
+            className={`deficit-main-nav-tab ${activeModalTab === 'cashier_claims' ? 'active' : ''}`}
+            onClick={() => setActiveModalTab('cashier_claims')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="12" y1="1" x2="12" y2="23" />
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+            <span>Payout Shortage Replenishment</span>
+            {cashierClaims.length > 0 && (
+              <span className="cashier-claims-count-badge">
+                {cashierClaims.filter((c) => Number(c.amount) > 0).length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {activeModalTab === 'cashier_claims' && (
+          <div className="cashier-claims-wrapper">
+            <div className="cashier-claims-header-bar">
+              <div className="cashier-claims-title-group">
+                <h3 className="cashier-claims-title">Payout Shortage Replenishment Ledger</h3>
+                <p className="cashier-claims-sub">
+                  Record payout shortage replenishment amounts collected by supervisors directly from the cashier.
+                </p>
+              </div>
+
+              <div className="cashier-claims-actions">
+                <button
+                  type="button"
+                  className={`cashier-save-db-btn status-${dbSyncStatus}`}
+                  onClick={() => setShowSaveConfirm(true)}
+                  disabled={dbSyncStatus === 'saving'}
+                  title="Save shortage replenishments to Supabase database"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                    <polyline points="17 21 17 13 7 13 7 21" />
+                    <polyline points="7 3 7 8 15 8" />
+                  </svg>
+                  <span>
+                    {dbSyncStatus === 'saving'
+                      ? 'Saving...'
+                      : dbSyncStatus === 'saved'
+                      ? '✓ Saved to Database'
+                      : dbSyncStatus === 'error'
+                      ? '⚠ Retry Save'
+                      : 'Save to Database'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className="cashier-add-row-btn"
+                  onClick={handleAddClaimRow}
+                  title="Add row for Supervisor"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <span>+ Add Row (Supervisor)</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="cashier-claims-table-container">
+              {cashierClaims.length === 0 ? (
+                <div className="cashier-claims-empty">
+                  <p>No payout shortage replenishment records found for this date.</p>
+                  <button type="button" className="cashier-add-row-btn" onClick={handleAddClaimRow}>
+                    + Add Row (Supervisor)
+                  </button>
+                </div>
+              ) : (
+                <table className="cashier-claims-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '55px' }}>#</th>
+                      <th style={{ width: '38%' }}>SUPERVISOR</th>
+                      <th style={{ width: '30%' }}>DRAW ROTATION</th>
+                      <th style={{ width: '24%' }}>REPLENISHMENT AMOUNT (₱)</th>
+                      <th style={{ width: '70px', textAlign: 'center' }}>ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cashierClaims.map((claim, idx) => (
+                      <tr
+                        key={claim.id}
+                        className={`cashier-claim-row ${claim.isSavedInDb ? 'is-saved-row' : 'is-unsaved-row'}`}
+                      >
+                        <td className="cashier-row-idx">
+                          <div className="cashier-idx-badge-wrap">
+                            <span>{idx + 1}</span>
+                            {claim.isSavedInDb ? (
+                              <span className="row-saved-check" title="Saved in database">✓</span>
+                            ) : (
+                              <span className="row-unsaved-dot" title="Unsaved draft">●</span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            list="supervisor-suggestions"
+                            className="cashier-input-field"
+                            placeholder="Select or type supervisor..."
+                            value={claim.supervisor}
+                            onChange={(e) => handleUpdateClaim(claim.id, 'supervisor', e.target.value)}
+                          />
+                          <datalist id="supervisor-suggestions">
+                            {supervisorList.map((s) => (
+                              <option key={s.name} value={s.name} />
+                            ))}
+                          </datalist>
+                        </td>
+                        <td>
+                          <select
+                            className="cashier-input-field cashier-select-field"
+                            value={claim.drawRotation || '1st Draw'}
+                            onChange={(e) => handleUpdateClaim(claim.id, 'drawRotation', e.target.value)}
+                          >
+                            <option value="1st Draw">1st Draw (Morning)</option>
+                            <option value="2nd Draw">2nd Draw (Afternoon)</option>
+                            <option value="3rd Draw">3rd Draw (Evening)</option>
+                            <option value="All Draws / Remittance">All Draws / Remittance</option>
+                          </select>
+                        </td>
+                        <td>
+                          <div className="cashier-amt-input-wrap">
+                            <span className="cashier-currency-prefix">₱</span>
+                            <input
+                              type="number"
+                              step="any"
+                              className="cashier-input-field cashier-amt-field"
+                              placeholder="0.00"
+                              value={claim.amount}
+                              onChange={(e) => handleUpdateClaim(claim.id, 'amount', e.target.value)}
+                            />
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            className="cashier-delete-btn"
+                            onClick={() => setPendingDeleteClaim(claim)}
+                            title="Delete row"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="cashier-claims-footer">
+              <div className="cashier-total-box">
+                <span className="cashier-total-label">TOTAL PAYOUT SHORTAGE REPLENISHMENTS:</span>
+                <strong className="cashier-total-val">{formatCurrency(totalCashierClaims)}</strong>
+                <span className="cashier-total-count">
+                  ({cashierClaims.filter((c) => Number(c.amount) > 0).length} supervisor claims)
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeModalTab === 'breakdown' && (
+          <>
 
         {/* Executive KPI Summary Cards */}
         <div className="deficit-kpi-grid">
@@ -831,6 +1191,9 @@ export default function DeficitInspectorModal({
           )}
         </div>
 
+          </>
+        )}
+
         {/* Modal Footer */}
         <div className="deficit-modal-footer">
           <div className="footer-left">
@@ -845,6 +1208,68 @@ export default function DeficitInspectorModal({
             </button>
           </div>
         </div>
+
+        {/* Confirmation Modal for Row Deletion */}
+        <ConfirmActionModal
+          isOpen={Boolean(pendingDeleteClaim)}
+          title="Delete Payout Shortage Entry?"
+          message="Are you sure you want to delete this replenishment entry? This action will permanently remove it from the database."
+          details={
+            pendingDeleteClaim && (
+              <div>
+                <div className="confirm-detail-row">
+                  <span className="confirm-detail-label">Supervisor</span>
+                  <span className="confirm-detail-value">{pendingDeleteClaim.supervisor || 'Unassigned'}</span>
+                </div>
+                <div className="confirm-detail-row">
+                  <span className="confirm-detail-label">Draw Rotation</span>
+                  <span className="confirm-detail-value">{pendingDeleteClaim.drawRotation || '1st Draw'}</span>
+                </div>
+                <div className="confirm-detail-row">
+                  <span className="confirm-detail-label">Replenishment Amount</span>
+                  <span className="confirm-detail-value">₱ {formatAmount(pendingDeleteClaim.amount)}</span>
+                </div>
+              </div>
+            )
+          }
+          confirmText="Yes, Delete Record"
+          cancelText="Cancel"
+          confirmVariant="danger"
+          isProcessing={isDeletingClaim}
+          processingText="Deleting from Database..."
+          onConfirm={handleConfirmDeleteRow}
+          onCancel={() => !isDeletingClaim && setPendingDeleteClaim(null)}
+        />
+
+        {/* Confirmation Modal for Save to Database */}
+        <ConfirmActionModal
+          isOpen={showSaveConfirm}
+          title="Save Shortage Replenishments to Database?"
+          message="Are you sure you want to save the Payout Shortage Replenishment ledger to the database for this branch and date?"
+          details={
+            <div>
+              <div className="confirm-detail-row">
+                <span className="confirm-detail-label">Branch</span>
+                <span className="confirm-detail-value">{branchName}</span>
+              </div>
+              <div className="confirm-detail-row">
+                <span className="confirm-detail-label">Date</span>
+                <span className="confirm-detail-value">{selectedDate}</span>
+              </div>
+              <div className="confirm-detail-row">
+                <span className="confirm-detail-label">Total Shortage Entries</span>
+                <span className="confirm-detail-value">{cashierClaims.length} records</span>
+              </div>
+            </div>
+          }
+          confirmText="Yes, Save to Database"
+          cancelText="Cancel"
+          confirmVariant="success"
+          isProcessing={isSavingToDb}
+          processingText="Saving to Database..."
+          onConfirm={handleConfirmSaveToDatabase}
+          onCancel={() => !isSavingToDb && setShowSaveConfirm(false)}
+        />
       </div>
     </div>
   )

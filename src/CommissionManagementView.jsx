@@ -10,6 +10,7 @@ import {
   resetSupervisorOverrides,
 } from './commissions'
 import { isSupabaseConfigured, syncCommissionSettingsFromSupabase } from './supabase'
+import ConfirmActionModal from './ConfirmActionModal'
 import './CommissionManagementView.css'
 
 function SvgIcon({ name, size = 16, className = '' }) {
@@ -231,18 +232,28 @@ export default function CommissionManagementView({
     onRatesUpdated(updated)
   }
 
+  const [pendingResetSupervisor, setPendingResetSupervisor] = useState(null)
+  const [isResettingSupervisor, setIsResettingSupervisor] = useState(false)
+
   // Handle Reset All Overrides for a Supervisor
   const handleResetSupervisorOverrides = (spvrName) => {
     if (!canEdit) {
       showToast('Action Denied: You do not have permission to modify commission rates.', 'error')
       return
     }
-    if (window.confirm(`Reset all agent overrides under supervisor "${spvrName}" back to default?`)) {
-      const updated = resetSupervisorOverrides(spvrName, settings)
-      setSettings(updated)
-      onRatesUpdated(updated)
-      showToast(`All agent overrides under "${spvrName}" reset to supervisor default.`)
-    }
+    setPendingResetSupervisor(spvrName)
+  }
+
+  const handleConfirmResetSupervisor = async () => {
+    if (!pendingResetSupervisor) return
+    setIsResettingSupervisor(true)
+    const updated = resetSupervisorOverrides(pendingResetSupervisor, settings)
+    setSettings(updated)
+    onRatesUpdated(updated)
+    await saveCommissionSettings(updated)
+    setIsResettingSupervisor(false)
+    showToast(`All agent overrides under "${pendingResetSupervisor}" reset to supervisor default.`)
+    setPendingResetSupervisor(null)
   }
 
   // Toggle Collapse/Expand
@@ -848,6 +859,28 @@ export default function CommissionManagementView({
           })
         )}
       </div>
+
+      {/* Confirmation Modal for Resetting Supervisor Overrides */}
+      <ConfirmActionModal
+        isOpen={Boolean(pendingResetSupervisor)}
+        title="Reset Agent Overrides?"
+        message={`Are you sure you want to reset all custom agent commission overrides under supervisor "${pendingResetSupervisor}" back to default rate?`}
+        details={
+          <div>
+            <div className="confirm-detail-row">
+              <span className="confirm-detail-label">Supervisor</span>
+              <span className="confirm-detail-value">{pendingResetSupervisor}</span>
+            </div>
+          </div>
+        }
+        confirmText="Yes, Reset Overrides"
+        cancelText="Cancel"
+        confirmVariant="warning"
+        isProcessing={isResettingSupervisor}
+        processingText="Resetting Overrides..."
+        onConfirm={handleConfirmResetSupervisor}
+        onCancel={() => !isResettingSupervisor && setPendingResetSupervisor(null)}
+      />
     </div>
   )
 }

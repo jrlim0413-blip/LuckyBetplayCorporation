@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { getPayoutShortagesFromSupabase } from './supabase'
 import './DrawDeficitsExcelStatement.css'
 
 function formatExcelDate(dateStr) {
@@ -20,8 +21,14 @@ function formatNegativeNum(val) {
 }
 
 function formatCurrencyTotal(val) {
-  const num = Math.abs(Math.round(Number(val) || 0))
-  return `(₱ ${num.toLocaleString('en-US')})`
+  const num = Number(val) || 0
+  const isNeg = num < 0
+  const absFormatted = Math.abs(num).toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+  if (isNeg) return `(₱ ${absFormatted})`
+  return `₱ ${absFormatted}`
 }
 
 export function calculateAgentDrawDeficit(agent, drawKey) {
@@ -90,13 +97,13 @@ const ALL_DRAWS_CONFIG = [
   { key: 'morning', title: '1ST DRAW', subtext: '10:30 AM & 2:00 PM' },
   { key: 'afternoon', title: '2ND DRAW', subtext: '3:00 PM & 5:00 PM' },
   { key: 'evening', title: '3RD DRAW', subtext: '7:00 PM & 9:00 PM' },
-  { key: 'remittance', title: 'NET REMITTANCE DEFICITS', subtext: 'Final Net Remittance' },
 ]
 
 export default function DrawDeficitsExcelStatement({
   group,
   allSupervisors = [],
   selectedDate,
+  branchName = 'Mandaue',
 }) {
   const isConsolidated = group?.supervisor === 'ALL SUPERVISORS (CONSOLIDATED)'
 
@@ -150,6 +157,84 @@ export default function DrawDeficitsExcelStatement({
       }
     })
   }, [group, allSupervisors, isConsolidated])
+
+  // Compute Overall Agent Figures
+  const overallTotals = useMemo(() => {
+    const rawGroups = (isConsolidated && allSupervisors && allSupervisors.length > 0)
+      ? allSupervisors
+      : [group || { supervisor: 'SUPERVISOR 1', agents: [] }]
+
+    let gross = 0
+    let hits = 0
+    let commission = 0
+    let net = 0
+    let remittance = 0
+
+    rawGroups.forEach((g) => {
+      (g.agents || []).forEach((agent) => {
+        const agGross = Number(agent.totalGross) || 0
+        const agHits = Number(agent.totalHits) || 0
+        const commRate = agent.commissionRate !== undefined ? agent.commissionRate : 10
+        const agComm = agent.totalSalary !== undefined ? Number(agent.totalSalary) : (agGross * (commRate / 100))
+        const agNet = agGross - agHits
+        const agRemit = agNet - agComm
+
+        gross += agGross
+        hits += agHits
+        commission += agComm
+        net += agNet
+        remittance += agRemit
+      })
+    })
+
+    return {
+      gross,
+      hits,
+      commission,
+      net,
+      remittance,
+    }
+  }, [group, allSupervisors, isConsolidated])
+
+  // Fetch Payout Shortage Replenishments (PSR) from database
+  const [psrData, setPsrData] = useState([])
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadPsr() {
+      const res = await getPayoutShortagesFromSupabase(branchName || 'Mandaue', selectedDate)
+      if (isMounted && res.success && res.data) {
+        setPsrData(res.data)
+      }
+    }
+    loadPsr()
+    return () => {
+      isMounted = false
+    }
+  }, [branchName, selectedDate])
+
+  const psrSummary = useMemo(() => {
+    const relevant = (!isConsolidated && group?.supervisor)
+      ? psrData.filter((p) => p.supervisor === group.supervisor)
+      : psrData
+
+    const map = new Map()
+    let totalPsr = 0
+
+    relevant.forEach((p) => {
+      const rot = p.drawRotation || '1st Draw'
+      const amt = Number(p.amount) || 0
+      map.set(rot, (map.get(rot) || 0) + amt)
+      totalPsr += amt
+    })
+
+    const list = Array.from(map.entries()).map(([rotation, amount]) => ({ rotation, amount }))
+
+    return {
+      list,
+      totalPsr,
+    }
+  }, [psrData, group, isConsolidated])
 
   const formattedDate = formatExcelDate(selectedDate)
 
@@ -284,6 +369,74 @@ export default function DrawDeficitsExcelStatement({
             )}
           </div>
         ))}
+
+        {/* CONSOLIDATED SUPERVISOR TOTAL & PSR CONTAINER */}
+        <div className="modern-draw-card modern-consolidated-card">
+          <div className="modern-draw-banner consolidated-banner">
+            <div className="modern-draw-title-left">
+              <span className="draw-title-badge">CONSOLIDATED SUPERVISOR TOTAL</span>
+            </div>
+          </div>
+
+          <div className="modern-summary-rows-body">
+            <div className="modern-sum-line">
+              <span className="sum-label">Overall Agent Gross</span>
+              <span className="sum-eq">=</span>
+              <span className="sum-val">{formatCurrencyTotal(overallTotals.gross)}</span>
+            </div>
+            <div className="modern-sum-line">
+              <span className="sum-label">Overall Agent Hits</span>
+              <span className="sum-eq">=</span>
+              <span className="sum-val">{formatCurrencyTotal(overallTotals.hits)}</span>
+            </div>
+            <div className="modern-sum-line">
+              <span className="sum-label">Overall Agent Commission</span>
+              <span className="sum-eq">=</span>
+              <span className="sum-val">{formatCurrencyTotal(overallTotals.commission)}</span>
+            </div>
+            <div className="modern-sum-line">
+              <span className="sum-label">Overall Agent Net</span>
+              <span className="sum-eq">=</span>
+              <span className="sum-val">{formatCurrencyTotal(overallTotals.net)}</span>
+            </div>
+            <div className="modern-sum-line remit-line">
+              <span className="sum-label">Overall Agent Remittance</span>
+              <span className="sum-eq">=</span>
+              <span className="sum-val">{formatCurrencyTotal(overallTotals.remittance)}</span>
+            </div>
+
+            <div className="modern-sum-hr" />
+
+            <div className="modern-psr-block">
+              <div className="psr-block-title">(PSR) Payout Shortage Replenishments</div>
+              {psrSummary.list.length === 0 ? (
+                <div className="modern-sum-line psr-indent-line">
+                  <span className="sum-label psr-label">No Replenishments</span>
+                  <span className="sum-eq">=</span>
+                  <span className="sum-val">₱ 0.00</span>
+                </div>
+              ) : (
+                psrSummary.list.map((item) => (
+                  <div key={item.rotation} className="modern-sum-line psr-indent-line">
+                    <span className="sum-label psr-label">{item.rotation}</span>
+                    <span className="sum-eq">=</span>
+                    <span className="sum-val">{formatCurrencyTotal(item.amount)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="modern-sum-hr" />
+
+            <div className="modern-sum-line grand-total-line">
+              <span className="sum-label grand-label">TOTAL REMITTANCE + PSR</span>
+              <span className="sum-eq">=</span>
+              <span className="sum-val grand-val">
+                {formatCurrencyTotal(overallTotals.remittance + psrSummary.totalPsr)}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

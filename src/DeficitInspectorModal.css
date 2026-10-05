@@ -1009,3 +1009,357 @@
     margin-left: 0;
   }
 }
+
+/* ==========================================================================
+   MAIN MODAL NAVIGATION TABS & CASHIER CLAIMS LEDGER
+   ========================================================================== */
+
+.deficit-main-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.deficit-main-nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.deficit-main-nav-tab:hover {
+  color: #1e293b;
+  background: #e2e8f0;
+}
+
+.deficit-main-nav-tab.active {
+  color: #dc2626;
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.cashier-claims-count-badge {
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  margin-left: 2px;
+}
+
+/* Cashier Claims Container */
+.cashier-claims-wrapper {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  max-height: calc(85vh - 180px);
+}
+
+.cashier-claims-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.cashier-claims-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.cashier-claims-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.cashier-add-row-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #0284c7;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: all 0.15s ease;
+}
+
+.cashier-add-row-btn:hover {
+  background: #0369a1;
+  transform: translateY(-1px);
+}
+
+.cashier-add-row-btn.secondary-add {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  box-shadow: none;
+}
+
+.cashier-add-row-btn.secondary-add:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+/* Claims Table */
+.cashier-claims-table-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow-y: auto;
+  max-height: 380px;
+  background: #ffffff;
+}
+
+.cashier-claims-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.cashier-claims-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.cashier-claims-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.cashier-claims-table tr:last-child td {
+  border-bottom: none;
+}
+
+.cashier-row-idx {
+  font-weight: 700;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.cashier-input-field {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.cashier-input-field:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.cashier-amt-input-wrap {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.cashier-currency-prefix {
+  position: absolute;
+  left: 10px;
+  font-weight: 700;
+  color: #64748b;
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.cashier-amt-field {
+  padding-left: 24px !important;
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.cashier-delete-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.cashier-delete-btn:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.cashier-claims-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Footer Box */
+.cashier-claims-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.cashier-total-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cashier-total-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.02em;
+}
+
+.cashier-total-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: #dc2626;
+}
+
+.cashier-total-count {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.cashier-claims-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cashier-save-db-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: all 0.15s ease;
+}
+
+.cashier-save-db-btn:hover {
+  background: #15803d;
+  transform: translateY(-1px);
+}
+
+.cashier-save-db-btn.status-saved {
+  background: #059669;
+}
+
+.cashier-save-db-btn.status-saving {
+  background: #2563eb;
+  cursor: wait;
+}
+
+.cashier-save-db-btn.status-saving svg {
+  animation: cashierSpinnerRotate 0.75s linear infinite;
+}
+
+.cashier-save-db-btn.status-error {
+  background: #dc2626;
+}
+
+@keyframes cashierSpinnerRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Row Saved / Unsaved Indicator Styling */
+.cashier-claim-row {
+  transition: all 0.2s ease;
+}
+
+.cashier-claim-row.is-saved-row {
+  background-color: rgba(16, 185, 129, 0.05) !important;
+  border-left: 3.5px solid #10b981 !important;
+}
+
+.cashier-claim-row.is-saved-row:hover {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+}
+
+.cashier-claim-row.is-unsaved-row {
+  background-color: rgba(245, 158, 11, 0.05) !important;
+  border-left: 3.5px solid #f59e0b !important;
+}
+
+.cashier-claim-row.is-unsaved-row:hover {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+}
+
+.cashier-idx-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.row-saved-check {
+  color: #34d399;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.row-unsaved-dot {
+  color: #fbbf24;
+  font-size: 0.7rem;
+}
