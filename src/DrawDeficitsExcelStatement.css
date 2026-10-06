@@ -142,7 +142,7 @@
   text-align: left;
   letter-spacing: 0.2px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
@@ -172,7 +172,7 @@
   color: #991b1b;
   text-align: left;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
@@ -243,7 +243,7 @@
   vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
 }
 
 .modern-td-detail {
@@ -260,7 +260,7 @@
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
@@ -286,7 +286,7 @@
   font-size: 8.5px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
 }
 
 .modern-td-amt {
@@ -414,7 +414,7 @@
     color: #334155 !important;
     width: auto !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: clip !important;
     white-space: nowrap !important;
   }
 
@@ -441,7 +441,7 @@
     padding: 0.8pt 3pt !important;
     width: auto !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: clip !important;
     white-space: nowrap !important;
   }
 
@@ -457,7 +457,7 @@
 .modern-draw-total-copy {
   min-width: 0 !important;
   overflow: hidden !important;
-  text-overflow: ellipsis !important;
+  text-overflow: clip !important;
   white-space: nowrap !important;
 }
 
@@ -481,7 +481,7 @@
     font-size: 7.2pt !important;
     color: #0f172a !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: clip !important;
     white-space: nowrap !important;
   }
 
@@ -521,7 +521,7 @@
     padding: 1pt 3pt !important;
     color: #991b1b !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: clip !important;
     white-space: nowrap !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;

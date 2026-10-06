@@ -60,13 +60,13 @@ export const PERMISSIONS = [
   // ---------------------------------------------------------------------------
   {
     key: 'print_statements',
-    label: 'Print Remittance Statements (A4)',
+    label: 'Print Remittance Statements',
     type: 'feature',
     featureName: 'Print Statements',
     group: 'Operations',
     parentTabs: ['view_overview', 'view_reports'],
     parentTabLabels: ['Overview Tab', 'Draw Reports Tab'],
-    description: 'Generates official A4 bond paper remittance statements and supervisor payout slips.',
+    description: 'Generates official remittance statements and supervisor payout slips.',
   },
   {
     key: 'export_data',

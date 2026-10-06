@@ -6,6 +6,9 @@ import CommissionManagementView from './CommissionManagementView'
 import FacebookProfileDropdown from './FacebookProfileDropdown'
 import DeficitInspectorModal from './DeficitInspectorModal'
 import DrawDeficitsExcelStatement from './DrawDeficitsExcelStatement'
+import AutoShrinkText from './AutoShrinkText'
+import CustomPrintBrowserModal from './CustomPrintBrowserModal'
+import './CustomPrintBrowserModal.css'
 import { loadCommissionSettings, getAgentCommissionRate } from './commissions'
 import {
   signOutFromSupabase,
@@ -118,7 +121,7 @@ function formatReportValue(value, column) {
   return column === 'drawTime' ? formatDrawTime(value) : formatValue(value)
 }
 
-function Icon({ name, size = 18 }) {
+export function Icon({ name, size = 18 }) {
   const paths = {
     overview: (
       <>
@@ -681,9 +684,9 @@ const PAPER_BUDGETS = {
   a4:       { w: 756, h: 1026 }, // 8.27in × 11.69in @ 96dpi minus 4mm margins
 }
 
-function calculateAutoFitScale(agentCount, paperType = 'longBond') {
+function calculateAutoFitScale(agentCount, paperType = 'a4') {
   // Fallback estimate used only before DOM measurement is available
-  const budget = PAPER_BUDGETS[paperType] || PAPER_BUDGETS.longBond
+  const budget = PAPER_BUDGETS[paperType] || PAPER_BUDGETS.a4
   // Fixed chrome: header ~80px, meta ~22px, th ~24px, 2 section headers ~40px,
   // 2 subtotal rows ~36px, grand total ~28px, spacers ~16px, draw deficits ~200px, sigs ~80px, footer ~20px
   const fixedPx = 546
@@ -735,9 +738,9 @@ function SupervisorStatementTable({
       const contentW = sheetRef.current?.scrollWidth  || 0
       const wrapW    = wrapRef.current?.clientWidth   || 800
 
-      // Determine available print height from @page or use Long Bond as default
-      // Long Bond = 13in - 8mm margins ≈ 1188px @ 96dpi
-      const availH = PAPER_BUDGETS.longBond.h
+      // Determine available print height from @page or use A4 as default
+      // A4 = 297mm - 8mm margins ≈ 1026px @ 96dpi
+      const availH = PAPER_BUDGETS.a4.h
       const availW = wrapW
 
       const scaleH = availH / contentH
@@ -902,20 +905,30 @@ function SupervisorStatementTable({
                         <span className="statement-agent-name">{agent.teller}</span>
                       </td>
                       <td className="statement-td statement-num-td">
-                        {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                        {formatAmount(agent.gross)}
+                        <AutoShrinkText align="right">
+                          {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                          {formatAmount(agent.gross)}
+                        </AutoShrinkText>
                       </td>
-                      <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.hits)}</td>
+                      <td className="statement-td statement-num-td accounting-deficit-text">
+                        <AutoShrinkText align="right">{formatAmount(agent.hits)}</AutoShrinkText>
+                      </td>
                       <td className="statement-td statement-num-td">
-                        {formatAmount(agent.commission)}
-                        {agent.commissionRate && (
-                          <small style={{ display: 'block', fontSize: '8px', color: '#64748b' }}>({agent.commissionRate}%)</small>
-                        )}
+                        <AutoShrinkText align="right">
+                          {formatAmount(agent.commission)}
+                          {agent.commissionRate && (
+                            <small style={{ display: 'inline-block', marginLeft: '3px', fontSize: '8px', color: '#64748b' }}>({agent.commissionRate}%)</small>
+                          )}
+                        </AutoShrinkText>
                       </td>
-                      <td className="statement-td statement-num-td accounting-deficit-text">{formatAmount(agent.net)}</td>
+                      <td className="statement-td statement-num-td accounting-deficit-text">
+                        <AutoShrinkText align="right">{formatAmount(agent.net)}</AutoShrinkText>
+                      </td>
                       <td className="statement-td statement-num-td statement-remit-td accounting-deficit-text">
-                        {index === 0 && <span className="accounting-currency-symbol">₱</span>}
-                        <strong>({formatAmount(Math.abs(agent.netSales))})</strong>
+                        <AutoShrinkText align="right">
+                          {index === 0 && <span className="accounting-currency-symbol">₱</span>}
+                          <strong>({formatAmount(Math.abs(agent.netSales))})</strong>
+                        </AutoShrinkText>
                       </td>
                     </tr>
                   ))
@@ -926,21 +939,31 @@ function SupervisorStatementTable({
                     <span className="statement-subtotal-indent statement-neg-label-indent">Total Deficits (Subtotal)</span>
                   </td>
                   <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
-                    <span className="accounting-currency-symbol">₱</span>
-                    <strong>{formatAmount(negativeTotals.gross)}</strong>
+                    <AutoShrinkText align="right">
+                      <span className="accounting-currency-symbol">₱</span>
+                      <strong>{formatAmount(negativeTotals.gross)}</strong>
+                    </AutoShrinkText>
                   </td>
                   <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                    <strong>{formatAmount(negativeTotals.hits)}</strong>
+                    <AutoShrinkText align="right">
+                      <strong>{formatAmount(negativeTotals.hits)}</strong>
+                    </AutoShrinkText>
                   </td>
                   <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell">
-                    <strong>{formatAmount(negativeTotals.commission)}</strong>
+                    <AutoShrinkText align="right">
+                      <strong>{formatAmount(negativeTotals.commission)}</strong>
+                    </AutoShrinkText>
                   </td>
                   <td className="statement-td statement-subtotal-num-td statement-neg-subtotal-cell accounting-deficit-text">
-                    <strong>{formatAmount(negativeTotals.net)}</strong>
+                    <AutoShrinkText align="right">
+                      <strong>{formatAmount(negativeTotals.net)}</strong>
+                    </AutoShrinkText>
                   </td>
                   <td className="statement-td statement-subtotal-num-td statement-remit-td statement-neg-subtotal-cell accounting-deficit-text">
-                    <span className="accounting-currency-symbol">₱</span>
-                    <strong>({formatAmount(Math.abs(negativeTotals.netSales))})</strong>
+                    <AutoShrinkText align="right">
+                      <span className="accounting-currency-symbol">₱</span>
+                      <strong>({formatAmount(Math.abs(negativeTotals.netSales))})</strong>
+                    </AutoShrinkText>
                   </td>
                 </tr>
 
@@ -953,21 +976,31 @@ function SupervisorStatementTable({
                     <strong>CONSOLIDATED SUPERVISOR TOTAL</strong>
                   </td>
                   <td className="statement-td statement-grand-num-td">
-                    <span className="accounting-currency-symbol">₱</span>
-                    <strong>{formatAmount(grandTotals.gross)}</strong>
+                    <AutoShrinkText align="right">
+                      <span className="accounting-currency-symbol">₱</span>
+                      <strong>{formatAmount(grandTotals.gross)}</strong>
+                    </AutoShrinkText>
                   </td>
                   <td className="statement-td statement-grand-num-td">
-                    <strong>{formatAmount(grandTotals.hits)}</strong>
+                    <AutoShrinkText align="right">
+                      <strong>{formatAmount(grandTotals.hits)}</strong>
+                    </AutoShrinkText>
                   </td>
                   <td className="statement-td statement-grand-num-td">
-                    <strong>{formatAmount(grandTotals.commission)}</strong>
+                    <AutoShrinkText align="right">
+                      <strong>{formatAmount(grandTotals.commission)}</strong>
+                    </AutoShrinkText>
                   </td>
                   <td className="statement-td statement-grand-num-td">
-                    <strong>{formatAmount(grandTotals.net)}</strong>
+                    <AutoShrinkText align="right">
+                      <strong>{formatAmount(grandTotals.net)}</strong>
+                    </AutoShrinkText>
                   </td>
                   <td className={`statement-td statement-grand-num-td statement-remit-td ${grandTotals.netSales < 0 ? 'accounting-deficit-text' : ''}`}>
-                    <span className="accounting-currency-symbol">₱</span>
-                    <strong>{grandTotals.netSales < 0 ? `(${formatAmount(Math.abs(grandTotals.netSales))})` : formatAmount(grandTotals.netSales)}</strong>
+                    <AutoShrinkText align="right">
+                      <span className="accounting-currency-symbol">₱</span>
+                      <strong>{grandTotals.netSales < 0 ? `(${formatAmount(Math.abs(grandTotals.netSales))})` : formatAmount(grandTotals.netSales)}</strong>
+                    </AutoShrinkText>
                   </td>
                 </tr>
               </tbody>
@@ -1004,7 +1037,7 @@ function SupervisorStatementTable({
         </div>
       </div>
       <div className="statement-print-footer-tag">
-        LUCKY BETPLAY CORPORATION • OFFICIAL REMITTANCE STATEMENT &amp; DRAW DEFICIT AUDIT • LONG BOND PAPER (8.5 × 13 IN) • {formatDisplayDate(selectedDate)}
+        LUCKY BETPLAY CORPORATION • OFFICIAL REMITTANCE STATEMENT &amp; DRAW DEFICIT AUDIT • {formatDisplayDate(selectedDate)}
       </div>
     </div>
     </div>
@@ -1142,169 +1175,30 @@ function SupervisorStatementModal({
   canPrint = true,
   currentUser = null,
 }) {
-  const [statementViewMode, setStatementViewMode] = useState('balance_sheet') // 'balance_sheet' (Official + Draw Deficits) | 'excel_grid'
+  if (!group) return null
 
-  const agentCount = group?.agents?.length || 0
-  const recommendedScale = useMemo(() => calculateAutoFitScale(agentCount), [agentCount])
-
-  const densityTier = useMemo(() => {
-    if (recommendedScale <= 52) return 'density-micro'
-    if (recommendedScale <= 68) return 'density-ultra'
-    if (recommendedScale <= 84) return 'density-compact'
-    return 'density-standard'
-  }, [recommendedScale])
-
-  useEffect(() => {
-    document.body.classList.add('statement-modal-active')
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.body.classList.remove('statement-modal-active')
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [onClose])
-
-  useEffect(() => {
-    if (statementViewMode === 'excel_grid') {
-      document.body.classList.add('print-excel-roster-active')
-    } else {
-      document.body.classList.remove('print-excel-roster-active')
-    }
-    return () => {
-      document.body.classList.remove('print-excel-roster-active')
-    }
-  }, [statementViewMode])
-
-  const consolidatedOption = useMemo(() => {
-    const agents = allSupervisors.flatMap((s) => s.agents.map((a) => ({
-      ...a,
-      teller: `${a.teller} (${s.supervisor})`,
-    })))
-    const totalSalary = allSupervisors.reduce((sum, s) => sum + (s.totalSalary !== undefined ? s.totalSalary : 0), 0)
-    const totalGross = allSupervisors.reduce((sum, s) => sum + s.totalGross, 0)
-    const totalHits = allSupervisors.reduce((sum, s) => sum + s.totalHits, 0)
-    return {
-      supervisor: 'ALL SUPERVISORS (CONSOLIDATED)',
-      agents,
-      totalSalary,
-      totalGross,
-      totalHits,
-    }
-  }, [allSupervisors])
-
-  const handlePrint = () => {
-    window.print()
-  }
-
-  const modalNode = (
-    <div className="statement-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="statement-modal-shell" onClick={(e) => e.stopPropagation()}>
-        <div className="statement-modal-controls-bar no-print">
-          <div className="statement-controls-left">
-            <span className="statement-controls-title">Print Statement:</span>
-
-            {/* Official Statement & Draw Deficits — only mode */}
-
-            {/* Supervisor Selector */}
-            {allSupervisors.length > 1 && (
-              <div className="statement-dropdown-wrap">
-                <Icon name="user" size={13} />
-                <select
-                  value={group.supervisor}
-                  onChange={(e) => {
-                    if (e.target.value === 'ALL SUPERVISORS (CONSOLIDATED)') {
-                      onSelectSupervisor(consolidatedOption)
-                    } else {
-                      const found = allSupervisors.find((g) => g.supervisor === e.target.value)
-                      if (found) onSelectSupervisor(found)
-                    }
-                  }}
-                  className="statement-supervisor-dropdown"
-                >
-                  <option value="ALL SUPERVISORS (CONSOLIDATED)">ALL SUPERVISORS (CONSOLIDATED)</option>
-                  <optgroup label="Individual Supervisors">
-                    {allSupervisors.map((s) => (
-                      <option key={s.supervisor} value={s.supervisor}>
-                        {s.supervisor} ({s.agents.length} agents)
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-            )}
-          </div>
-
-          <div className="statement-controls-right">
-            <button
-              type="button"
-              className={`statement-action-btn statement-print-trigger-btn ${!canPrint ? 'is-perm-locked' : ''}`}
-              onClick={() => {
-                if (!canPrint) {
-                  alert(`Access Restricted: Printing statements is locked for @${currentUser?.username || 'your account'} in the Role Matrix.`)
-                  return
-                }
-                handlePrint()
-              }}
-              title={canPrint ? "Print official document on Long Bond Paper (or Save as PDF)" : "Printing statements is locked for your account in the Role Matrix"}
-            >
-              <Icon name={canPrint ? "print" : "lock"} size={14} />
-              <span>{canPrint ? "Print Statement" : "Print Locked"}</span>
-            </button>
-            <button
-              type="button"
-              className="statement-action-btn statement-close-trigger-btn"
-              onClick={onClose}
-              title="Close (Esc)"
-              aria-label="Close"
-            >
-              <Icon name="close" size={16} />
-            </button>
-          </div>
-        </div>
-
-        <div className="statement-modal-content-area">
-          <style>{`@page { size: 8.5in 13in portrait !important; margin: 4mm 8mm !important; }`}</style>
-          <div className="statement-preview-header-tag no-print">
-            <div className="statement-preview-meta-info">
-              <span className="statement-preview-page-pill">
-                <Icon name="fileText" size={12} />
-                Official Statement &amp; Draw Deficits • Long Bond Paper (8.5 × 13 in)
-              </span>
-              <span className="statement-preview-scale-pill">
-                Supervisor: <strong>{group?.supervisor || 'ALL'}</strong>
-              </span>
-              <span className="statement-preview-agent-pill">
-                {agentCount} Total Agents
-              </span>
-            </div>
-            <div className="statement-preview-status-indicator">
-              <span className="statement-fit-badge fit-safe" title="Guaranteed to fit completely within 1 single Long bond paper">
-                <Icon name="check" size={12} />
-                <span>1 Long Bond Paper Guaranteed</span>
-              </span>
-            </div>
-          </div>
-
-          <div className="statement-a4-page-frame statement-long-bond-frame">
-            <SupervisorStatementTable
-              group={group}
-              allSupervisors={allSupervisors}
-              selectedDate={selectedDate}
-              branchName={branchName}
-              isModal={true}
-              fitOnePage={true}
-              fontScale={recommendedScale}
-              densityTier={densityTier}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+  return (
+    <CustomPrintBrowserModal
+      isOpen={!!group}
+      onClose={onClose}
+      group={group}
+      allSupervisors={allSupervisors}
+      selectedDate={selectedDate}
+      branchName={branchName}
+      canPrint={canPrint}
+      currentUser={currentUser}
+      onSelectSupervisor={onSelectSupervisor}
+    >
+      <SupervisorStatementTable
+        group={group}
+        allSupervisors={allSupervisors}
+        selectedDate={selectedDate}
+        branchName={branchName}
+        isModal={true}
+        fitOnePage={true}
+      />
+    </CustomPrintBrowserModal>
   )
-
-  return createPortal(modalNode, document.body)
 }
 
 
@@ -1771,7 +1665,7 @@ function OverviewDashboard({
                             }
                             onViewStatement(spvr)
                           }}
-                          title={canPrint ? `Print official remittance statement for ${spvr.supervisor} (A4)` : "Printing statements is locked for your account in the Role Matrix"}
+                          title={canPrint ? `Print official remittance statement for ${spvr.supervisor}` : "Printing statements is locked for your account in the Role Matrix"}
                         >
                           <Icon name={canPrint ? "print" : "lock"} size={12} />
                           <span>{canPrint ? "Print Statement" : "Print Locked"}</span>
@@ -2684,10 +2578,10 @@ function App() {
                                   }
                               if (target) setStatementModalGroup(target)
                             }}
-                            title={can('print_statements') ? "View and print official balance sheet remittance statement on A4 bond paper" : "Printing statements is locked for your account in the Role Matrix"}
+                            title={can('print_statements') ? "View and print official balance sheet remittance statement" : "Printing statements is locked for your account in the Role Matrix"}
                           >
                             <Icon name={can('print_statements') ? "print" : "lock"} size={13} />
-                            <span>{can('print_statements') ? "Print Statement (A4)" : "Print Locked"}</span>
+                            <span>{can('print_statements') ? "Print Statement" : "Print Locked"}</span>
                           </button>
                         </>
                       )}
@@ -2710,7 +2604,7 @@ function App() {
                           }
                           setStatementModalGroup(group)
                         }}
-                        title={can('print_statements') ? `Open official financial statement for ${group.supervisor} (A4)` : "Printing statements is locked for this account in the Role Matrix"}
+                        title={can('print_statements') ? `Open official financial statement for ${group.supervisor}` : "Printing statements is locked for this account in the Role Matrix"}
                       >
                         <Icon name={can('print_statements') ? "print" : "lock"} size={13} />
                         <span>{can('print_statements') ? "Print Statement" : "Print Locked"}</span>

@@ -822,12 +822,12 @@ button { font: inherit; }
 
 .statement-th-agent {
   text-align: left;
-  width: 28%;
+  width: 24%;
 }
 
 .statement-th-num {
   text-align: right;
-  width: 14.4%;
+  width: 15.2%;
 }
 
 .statement-th-remit {
@@ -874,7 +874,7 @@ button { font: inherit; }
 }
 
 .statement-td {
-  padding: 2px 6px;
+  padding: 2px 3px;
   font-size: 10.5px;
   color: #334155;
   border-bottom: 1px solid #f1f5f9;
@@ -883,7 +883,7 @@ button { font: inherit; }
 
 .statement-agent-td {
   text-align: left;
-  padding-left: 6px;
+  padding-left: 3px;
 }
 
 .statement-agent-name {
@@ -896,6 +896,7 @@ button { font: inherit; }
   font-family: 'Manrope', sans-serif;
   font-variant-numeric: tabular-nums;
   position: relative;
+  text-overflow: clip !important;
 }
 
 .accounting-currency-symbol {
@@ -2532,8 +2533,8 @@ button { font: inherit; }
    ========================================================================== */
 
 @page {
-  size: 8.5in 13in portrait;
-  margin: 5mm 8mm;
+  size: A4 portrait;
+  margin: 4mm 5mm;
 }
 
 @media print {
@@ -2561,8 +2562,8 @@ button { font: inherit; }
      2. PAGE / DOCUMENT RESET
      ══════════════════════════════════════════════════════════════════ */
   @page {
-    size: 8.5in 13in portrait;
-    margin: 5mm;
+    size: A4 portrait;
+    margin: 4mm 5mm;
   }
 
   html, body {
@@ -2793,8 +2794,8 @@ button { font: inherit; }
   }
 
   /* Responsive column widths inside narrow 57% left column */
-  .statement-th-agent { width: 32% !important; text-align: left !important; }
-  .statement-th-num   { width: 13.6% !important; text-align: right !important; }
+  .statement-th-agent { width: 28% !important; text-align: left !important; }
+  .statement-th-num   { width: 14.4% !important; text-align: right !important; }
 
   .statement-section-divider-row {
     background: #f1f5f9 !important;
@@ -2825,21 +2826,21 @@ button { font: inherit; }
 
   /* Each data row — compact and readable at 7.8pt */
   .statement-td {
-    padding: 1pt 3pt !important;
+    padding: 1pt 2pt !important;
     font-size: 7.8pt !important;
     color: #0f172a !important;
     border-bottom: 0.4pt solid #e2e8f0 !important;
     line-height: 1.15 !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: clip !important;
     white-space: nowrap !important;
   }
 
   .statement-agent-td {
-    padding-left: 3pt !important;
+    padding-left: 2pt !important;
     white-space: nowrap !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: clip !important;
   }
 
   .statement-agent-name {
@@ -2847,9 +2848,9 @@ button { font: inherit; }
     color: #0f172a !important;
     white-space: nowrap !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: clip !important;
     max-width: 100% !important;
-    display: block !important;
+    display: inline-block !important;
   }
 
   .statement-num-td {
@@ -3845,6 +3846,32 @@ body[data-theme="dark"] {
 [data-theme="dark"] .supervisor-statement-top-btn.deficit-inspector-btn:hover {
   background: rgba(220, 38, 38, 0.25);
   color: #ffffff;
+}
+
+/* ==========================================================================
+   AUTO-SHRINK FONT FALLBACK UTILITIES FOR FIGURES
+   ========================================================================== */
+.auto-shrink-container {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.auto-shrink-container *,
+.statement-num-td .auto-shrink-container * {
+  text-overflow: clip !important;
+}
+
+.auto-shrink-content {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.auto-shrink-container.is-shrunk {
+  letter-spacing: -0.15px;
 }
 
 
